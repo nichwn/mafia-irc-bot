@@ -138,6 +138,30 @@ class MafiaGame:
         else:
             return False
 
+    def leave(self, user):
+        """Removes a player from the player list, if possible."""
+        if user in self.players:
+            del self.players[user]
+            return True
+        else:
+            return False
+
+    def noPlayers(self):
+        """Determines if there are players left."""
+        if len(self.players):
+            return False
+        else:
+            return True
+
+    def newGop(self):
+        """Changes the new GOP."""
+        self.gop = self.players.keys()[0]
+        return self.gop
+
+    def isGop(self, user):
+        """Determines if the user is GOP."""
+        return user == self.gop
+
 
 class MafiaBot(irc.IRCClient):
     """A bot which manages a mafia game."""
@@ -322,7 +346,7 @@ class MafiaBot(irc.IRCClient):
                     msg = "{} has joined the game.".format(user_orig)
                 else:
                     # Already signed up
-                    msg = ("Failed to join the game, as '{}' ".format(user_orig)
+                    msg = ("Failed to join the game, as {} ".format(user_orig)
                            + "has already entered.")
             elif self.nickname.lower() == channel:
                     # Can't sign up privately
@@ -331,6 +355,35 @@ class MafiaBot(irc.IRCClient):
                 # Wrong phase
                 msg = "You can't join the game right now."
             self.msg_send(self.nickname, channel, user, msg)
+
+        elif command == "leave":
+            #Attempt to leave a new game.
+            if (self.game.getPhase() == self.game.getSign_Up()
+                and self.nickname.lower() != channel):
+                gop = self.game.isGop(user)
+                if self.game.leave(user):
+                    # Left!
+                    msg = "{} has left the game.".format(user_orig)
+                    if self.game.noPlayers():
+                        # Players remaining?
+                        msg += (" As there are no players left the "
+                                "game has been closed.")
+                    elif gop:
+                        # Leaving playing was GOP. Select a new one.
+                        n_gop = self.game.newGop()
+                        msg += " {} is now GOP.".format(n_gop)
+                else:
+                    # Not in game
+                    msg = ("Failed to leave the game, as {}".format(user_orig)
+                           + "has not entered it.")
+            elif self.nickname.lower() == channel:
+                    # Can't sign up privately
+                    msg = "You can't leave a game via PM."
+            else:
+                # Wrong phase
+                msg = "You can't leave the game right now."
+            self.msg_send(self.nickname, channel, user, msg)
+    
 
 
 
