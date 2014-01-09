@@ -3,6 +3,7 @@
 # TODO - check getEtc. rather than etc.
 # TODO - manage if a player d/cs or is kicked
 # TODO - allow for reconnection? Reset game? Continue game but check integrity?
+# TODO - more generic block of private actions - command whitelist?
 
 """
 
@@ -113,7 +114,6 @@ class MafiaGame:
 
     def transferGop(self, user, target):
         """Transfer GOP to a target player."""
-        print target, self.players.keys()
         if user == self.gop and target in self.players:
             self.gop = target
             return True
@@ -145,6 +145,9 @@ class MafiaBot(irc.IRCClient):
     nickname = "Mafiabot"  # TODO - make an argument parameter
     password = "mafiabot"  # TODO - make an argument parameter
     sourceURL = ""  # TODO - fill in later
+
+    MIN_PLAYERS = 5
+    MAX_PLAYERS = 12
 
 
     # Connection
@@ -193,26 +196,27 @@ class MafiaBot(irc.IRCClient):
         
         # Interpret command
         if command == "new":
-            # Attempt to start a new game
+            # Attempt to begin a new game
             if (channel != self.nickname.lower() and
                 self.game.getPhase() == self.game.getInitial()):
-                # Start a new game
+                # Begin a new game
                 self.game.newGame(user)
                 msg = ("A new mafia game has begun! Type !join to join. There "
-                       "is a minimum of 5, and a maximum of 12 players that "
-                       "can play.\nThe game starter has been given Game "
+                       "is a minimum of {}, and ".format(self.MIN_PLAYERS) +
+                       "a maximum of {} players ".format(self.MAX_PLAYERS) +
+                       "that can play.\nThe game starter has been given Game "
                        "Operator (GOP) status and can commence the game by "
                        "typing !start.")
 
             elif self.game.getPhase() != self.game.getInitial():
-                # Can't start a new game as one is already in progress
+                # Can't begin a new game as one is already in progress
                 msg = ("A game is already in progress. Wait for it to finish "
                        "before starting a new one.\nIf you'd like to end a "
                        "game early, you can type !end to end the game, or "
                        "!restart to restart the game if you're the GOP.")
 
             else:
-                # Can't start a new game, as we don't know what channel to play
+                # Can't begin a new game, as we don't know what channel to play
                 # it in
                 msg = ("You can't start a game with a PM. Please try again "
                        "in the channel you'd like to play in.")
@@ -327,7 +331,6 @@ class MafiaBot(irc.IRCClient):
                 # Wrong phase
                 msg = "You can't join the game right now."
             self.msg_send(self.nickname, channel, user, msg)
-                
 
 
 
