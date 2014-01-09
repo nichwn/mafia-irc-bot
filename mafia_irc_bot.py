@@ -146,12 +146,9 @@ class MafiaGame:
         else:
             return False
 
-    def noPlayers(self):
+    def numPlayers(self):
         """Determines if there are players left."""
-        if len(self.players):
-            return False
-        else:
-            return True
+        return len(self.players.keys())
 
     def newGop(self):
         """Changes the new GOP."""
@@ -341,9 +338,14 @@ class MafiaBot(irc.IRCClient):
             #Attempt to join a new game.
             if (self.game.getPhase() == self.game.getSign_Up()
                 and self.nickname.lower() != channel):
-                if self.game.join(user):
+                if (self.game.join(user) and
+                    self.game.numPlayers() <= self.MAX_PLAYERS):
                     # Joined!
                     msg = "{} has joined the game.".format(user_orig)
+                elif self.game.numPlayers() > self.MAX_PLAYERS:
+                    # Too many players
+                    msg = ("{} failed to join the game as the game capacity "
+                           "reached the cap.")
                 else:
                     # Already signed up
                     msg = ("Failed to join the game, as {} ".format(user_orig)
@@ -364,10 +366,11 @@ class MafiaBot(irc.IRCClient):
                 if self.game.leave(user):
                     # Left!
                     msg = "{} has left the game.".format(user_orig)
-                    if self.game.noPlayers():
+                    if self.game.numPlayers() == 0:
                         # Players remaining?
                         msg += (" As there are no players left the "
                                 "game has been closed.")
+                        self.game.gameClear()
                     elif gop:
                         # Leaving playing was GOP. Select a new one.
                         n_gop = self.game.newGop()
