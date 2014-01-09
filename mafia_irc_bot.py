@@ -130,6 +130,14 @@ class MafiaGame:
                 alive.append(k)
         return alive
 
+    def join(self, user):
+        """Adds a player to the player list, if not already in it."""
+        if user not in self.players:
+            self.players[user] = None
+            return True
+        else:
+            return False
+
 
 class MafiaBot(irc.IRCClient):
     """A bot which manages a mafia game."""
@@ -289,6 +297,8 @@ class MafiaBot(irc.IRCClient):
             self.msg_send(self.nickname, channel, user, msg)
 
         elif command == "alive":
+            # Not yet tested, as there's no way to start the game yet. A bit
+            # dumb to have written it at this stage I'll admit.
             if self.game.getPhase() > self.game.getSign_Up():
                 # Game active, so determine living players
                 msg = "Players alive:"
@@ -298,6 +308,26 @@ class MafiaBot(irc.IRCClient):
                 # Game inactive
                 msg = "No game is running."
             self.msg_send(self.nickname, channel, user, msg)
+
+        elif command == "join":
+            #Attempt to join a new game.
+            if (self.game.getPhase() == self.game.getSign_Up()
+                and self.nickname.lower() != channel):
+                if self.game.join(user):
+                    # Joined!
+                    msg = "{} has joined the game.".format(user_orig)
+                else:
+                    # Already signed up
+                    msg = ("Failed to join the game, as '{}' ".format(user_orig)
+                           + "has already entered.")
+            elif self.nickname.lower() == channel:
+                    # Can't sign up privately
+                    msg = "You can't join a game via PM."
+            else:
+                # Wrong phase
+                msg = "You can't join the game right now."
+            self.msg_send(self.nickname, channel, user, msg)
+                
 
 
 
