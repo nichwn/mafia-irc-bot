@@ -4,6 +4,9 @@
 # TODO - manage if a player d/cs or is kicked
 # TODO - allow for reconnection? Reset game? Continue game but check integrity?
 # TODO - more generic block of private actions - command whitelist?
+# TODO - put self.nickname.lower() == channel into a function
+# TODO - instead of calling privmsg, make a function and call that
+# (ex. !restart and !end)
 
 """
 
@@ -101,7 +104,7 @@ class MafiaGame:
 
     def end(self, user):
         """Attempts to end the game. Return True if the game was ended."""
-        if user == self.gop:
+        if self.isGop(user):
             self.gameClear()
             return True
         else:
@@ -159,6 +162,26 @@ class MafiaGame:
         """Determines if the user is GOP."""
         return user == self.gop
 
+    def rollRoles(self):
+        """Determines peoples roles, and returns player data."""
+        pass
+
+    def nextRound(self):
+        """Increments the round number, and returns it."""
+        pass
+
+    def setDay(self):
+        """Sets the game status to 'Day'."""
+        pass
+
+    def clear(self):
+        """Clears data that doesn't need to be kept between phases."""
+        pass
+
+    def detVictory(self):
+        """Determines if an alignment has won. Return None if no alignment has.
+        """
+    
 
 class MafiaBot(irc.IRCClient):
     """A bot which manages a mafia game."""
@@ -386,6 +409,29 @@ class MafiaBot(irc.IRCClient):
                 # Wrong phase
                 msg = "You can't leave the game right now."
             self.msg_send(self.nickname, channel, user, msg)
+
+        elif command == "start":
+            n_players = self.game.numPlayers()
+            if (self.game.isGop(user) and
+                self.MIN_PLAYERS <= n_players and
+                self.nickname.lower() != channel):
+                # Closes sign ups and begins the game
+                msg = ("Sign ups have been closed, and the game will begin "
+                       "shortly. You should be receiving your roles now.")
+                self.gameStart()
+                return
+            elif not self.game.isGop(user):
+                # Only GOP can use this command
+                msg = "Only the GOP can use this command."
+            elif self.MIN_PLAYERS > n_players:
+                # Not enough players
+                msg = ("Insufficient number of players. The minimum number "
+                       "is {} and there is/are only ".format(self.MIN_PLAYERS) +
+                       "{} player(s) signed up.".format(n_players))
+            else:
+                # Can't start via private message
+                msg = ("You cannot use this command via PM.")
+            self.msg_send(self.nickname, channel, user, msg)
     
 
 
@@ -411,6 +457,30 @@ class MafiaBot(irc.IRCClient):
         else:
             # Channel
             self.msg(channel, msg)
+
+    def gameStart(self):
+        players = self.game.rollRoles()
+        self.rollDay()
+
+    def rollDay(self):
+        """Roll a new day phase."""
+        round = self.game.nextRound()
+        self.newPhaseAct()
+        self.game.setDay()
+        #TODO - implement flavour
+
+    def newPhaseAct(self):
+        """Performs actions required at the start of every phase."""
+        self.game.clear()
+        vict = self.game.detVictory()
+        if vict is not None:
+            # Victory achieved
+            self.victory()
+
+    def victory(self):
+        """Winning proceedings."""
+        pass
+            
 
 
 class MafiaBotFactory(protocol.ClientFactory):
