@@ -17,7 +17,7 @@ An IRC bot which manages Mafia games.
 from twisted.words.protocols import irc
 from twisted.internet import reactor, protocol
 
-import sys
+import sys, random
 
 
 class Role:
@@ -49,18 +49,22 @@ class MafiaGame:
     DAY = 2
     NIGHT = 3
 
+    #Flags for mafia numbers in relation to player numbers
+    SECOND_MAFIA = 8
+    THIRD_MAFIA = 11
 
     def __init__(self):
         self.players = {}
         self.gop = ""
         self.round = 0
+        self.actions = 0
         self.phase = self.INITIAL
 
     def newGame(self, user):
         """Start a new game."""
         self.phase = self.SIGN_UP
         self.gop = user
-        self.players[user] = None
+        self.players[user] = Player()
 
     def commands(self):
         """Returns a list of currently available commands and how to use
@@ -115,6 +119,8 @@ class MafiaGame:
         """Clears the game data in preparation for a new game."""
         self.players = {}
         self.phase = self.INITIAL
+        self.round = 0
+        self.actions = 0
 
     def transferGop(self, user, target):
         """Transfer GOP to a target player."""
@@ -127,9 +133,9 @@ class MafiaGame:
     def getLivingPlayers(self):
         """Return a list of all living players."""
         alive = []
-        for k, v in self.players.iteritems():
+        for data in self.players.values():
             # Iterate through all the players
-            if v.state == "alive":
+            if data.state == "alive":
                 # Living player found
                 alive.append(k)
         return alive
@@ -137,7 +143,7 @@ class MafiaGame:
     def join(self, user):
         """Adds a player to the player list, if not already in it."""
         if user not in self.players:
-            self.players[user] = None
+            self.players[user] = Player()
             return True
         else:
             return False
@@ -160,12 +166,62 @@ class MafiaGame:
         return self.gop
 
     def isGop(self, user):
-        """Determines if the user is GOP."""
+        """Determine if the user is GOP."""
         return user == self.gop
+
+    def roleGen(self):
+        """Generate player roles, and return them."""
+        role_vanilla = Role("Vanilla", "Town", None)
+        role_goon = Role("Mafia", "Goon", None)
+
+        # Construct role list
+        roles = []
+        p_num = self.numPlayers()
+        
+
+        # Mafia roles
+        count = 0
+        if p_num >= self.THIRD_MAFIA:
+            # 3 mafia players
+            n_mafia = 3
+        elif p_num >= self.SECOND_MAFIA:
+            # 2 mafia players
+            n_mafia = 2
+        else:
+            # 1 mafia player
+            n_mafia = 1
+
+        while count < n_mafia:
+            roles.append(role_goon)
+            count += 1
+
+        # Town roles
+        count = 0
+        n_town = p_num - n_mafia
+
+        while count < n_town:
+            roles.append(role_vanilla)
+            count += 1
+
+        return roles
+
+    def roleDist(self, roles):
+        """Distribute roles to players."""
+        # Assign roles
+        random.shuffle(roles)  # TODO - check documentation
+        i = 0
+        for p in self.players:
+            self.players[p].role = roles[i]
+            i += 1
+
+        # The mafia as a whole has one action
+        self.actions += 1
 
     def rollRoles(self):
         """Determines peoples roles, and returns player data."""
-        pass
+        roles = self.roleGen()
+        self.roleDist(roles)
+        return self.players
 
     def nextRound(self):
         """Increments the round number, and returns it."""
@@ -178,10 +234,10 @@ class MafiaGame:
 
     def clear(self):
         """Clears data that doesn't need to be kept between phases."""
-        for data in players.values():
-            data.vote = None
-            self.voted_by = []
-            self.role.ab_target = None
+        for p in self.players:
+            self.players[p].vote = None
+            self.players[p].voted_by = []
+            self.players[p].role.ab_target = None
 
     def detVictory(self):
         """Determines if an alignment has won. Return None if no alignment has.
