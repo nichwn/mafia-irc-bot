@@ -36,7 +36,7 @@ class Player:
     def __init__(self, state = "alive", role = None):
         self.state = state
         self.role = role
-        self.vote = ""
+        self.vote = None
         self.voted_by = []
 
 
@@ -53,6 +53,7 @@ class MafiaGame:
     def __init__(self):
         self.players = {}
         self.gop = ""
+        self.round = 0
         self.phase = self.INITIAL
 
     def newGame(self, user):
@@ -168,20 +169,32 @@ class MafiaGame:
 
     def nextRound(self):
         """Increments the round number, and returns it."""
-        pass
+        self.round += 1
+        return self.round
 
     def setDay(self):
         """Sets the game status to 'Day'."""
-        pass
+        self.phase = self.DAY
 
     def clear(self):
         """Clears data that doesn't need to be kept between phases."""
-        pass
+        for data in players.values():
+            data.vote = None
+            self.voted_by = []
+            self.role.ab_target = None
 
     def detVictory(self):
         """Determines if an alignment has won. Return None if no alignment has.
         """
-    
+        align = []
+        for data in self.players.values():
+            if data.role.alignment not in align:
+                align.append(data.role.alignment)
+                if len(align) > 1:
+                    # More than one alignment still remains
+                    return None
+        return align[0]
+
 
 class MafiaBot(irc.IRCClient):
     """A bot which manages a mafia game."""
