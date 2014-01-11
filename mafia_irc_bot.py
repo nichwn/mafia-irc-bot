@@ -7,6 +7,7 @@
 # TODO - put self.nickname.lower() == channel into a function
 # TODO - instead of calling privmsg, make a function and call that
 # (ex. !restart and !end)
+# TODO - rewrite how player name data is stored, so it maintains case
 
 """
 
@@ -172,7 +173,7 @@ class MafiaGame:
     def roleGen(self):
         """Generate player roles, and return them."""
         role_vanilla = Role("Vanilla", "Town", None)
-        role_goon = Role("Mafia", "Goon", None)
+        role_goon = Role("Goon", "Mafia", None)
 
         # Construct role list
         roles = []
@@ -218,9 +219,12 @@ class MafiaGame:
         self.actions += 1
 
     def rollRoles(self):
-        """Determines peoples roles, and returns player data."""
+        """Determines peoples roles."""
         roles = self.roleGen()
         self.roleDist(roles)
+
+    def getPlayers(self):
+        """Returns player data as a dict."""
         return self.players
 
     def nextRound(self):
@@ -257,6 +261,14 @@ class MafiaGame:
         self.majority = len(self.players) / 2 + 1
         return self.majority
 
+    def getMafia(self):
+        """Returns a list of people with the alignment, 'Mafia'."""
+        mafia = []
+        for player, data in self.players.iteritems():
+            if data.role.alignment == "Mafia":
+                mafia.append(player)
+        return mafia
+
 
 class MafiaBot(irc.IRCClient):
     """A bot which manages a mafia game."""
@@ -265,7 +277,7 @@ class MafiaBot(irc.IRCClient):
     password = None  # TODO - make an argument parameter
     sourceURL = ""  # TODO - fill in later
 
-    MIN_PLAYERS = 5
+    MIN_PLAYERS = 1
     MAX_PLAYERS = 12
 
 
@@ -529,9 +541,10 @@ class MafiaBot(irc.IRCClient):
             self.msg(channel, msg)
 
     def gameStart(self, channel):
-        players = self.game.rollRoles()
+        self.game.rollRoles()
+        self.outRoles()
         self.rollDay(channel)
-        # TODO - game start and role flavour
+        # TODO - game start flavour
 
     def rollDay(self, channel):
         """Roll a new day phase."""
@@ -566,7 +579,32 @@ class MafiaBot(irc.IRCClient):
 
     def newDayDeathFlav(self):
         pass
-            
+
+    def outRoles(self):
+        """Gives players their role information."""
+        players = self.game.getPlayers()
+        mafia = self.game.getMafia()
+        for p_name, data in players.iteritems():
+            r_name = data.role.r_name
+            align = data.role.alignment
+            msg = "You are a(n) {} {}.\n".format(align, r_name)
+
+            # Mafia information
+            if align == "Mafia":
+
+                # Teammates
+                msg += "Your team is composed of:\n"
+                for m in mafia:
+                    msg += "{}\n".format(m)
+                msg += "And you may PM them at any time.\n"
+
+                # Kill
+                msg += ("The mafia alignment has a kill shared between them, "
+                        "which can be used during the night phase with the "
+                        "command:\n/msg "
+                        "{} <kill target>.".format(self.nickname))
+
+            self.msg(p_name, msg)
 
 
 class MafiaBotFactory(protocol.ClientFactory):
