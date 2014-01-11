@@ -158,7 +158,7 @@ class MafiaGame:
 
     def numPlayers(self):
         """Determines if there are players left."""
-        return len(self.players.keys())
+        return len(self.players)
 
     def newGop(self):
         """Changes the new GOP."""
@@ -251,12 +251,18 @@ class MafiaGame:
                     return None
         return align[0]
 
+    def getMajority(self):
+        """Determine and return majority."""
+        # Majority is > 50%, which can be determined by total / 2 + 1
+        self.majority = len(self.players) / 2 + 1
+        return self.majority
+
 
 class MafiaBot(irc.IRCClient):
     """A bot which manages a mafia game."""
 
     nickname = "Mafiabot"  # TODO - make an argument parameter
-    password = "mafiabot"  # TODO - make an argument parameter
+    password = None  # TODO - make an argument parameter
     sourceURL = ""  # TODO - fill in later
 
     MIN_PLAYERS = 5
@@ -469,7 +475,7 @@ class MafiaBot(irc.IRCClient):
                         msg += " {} is now GOP.".format(n_gop)
                 else:
                     # Not in game
-                    msg = ("Failed to leave the game, as {}".format(user_orig)
+                    msg = ("Failed to leave the game, as {} ".format(user_orig)
                            + "has not entered it.")
             elif self.nickname.lower() == channel:
                     # Can't sign up privately
@@ -487,7 +493,7 @@ class MafiaBot(irc.IRCClient):
                 # Closes sign ups and begins the game
                 msg = ("Sign ups have been closed, and the game will begin "
                        "shortly. You should be receiving your roles now.")
-                self.gameStart()
+                self.gameStart(channel)
                 return
             elif not self.game.isGop(user):
                 # Only GOP can use this command
@@ -501,13 +507,8 @@ class MafiaBot(irc.IRCClient):
                 # Can't start via private message
                 msg = ("You cannot use this command via PM.")
             self.msg_send(self.nickname, channel, user, msg)
-    
-
-
-
 
         # TODO - add more commands
-
 
     def irc_NICK(self, prefix, params):
         """Called when an IRC user changes their nickname."""
@@ -527,16 +528,28 @@ class MafiaBot(irc.IRCClient):
             # Channel
             self.msg(channel, msg)
 
-    def gameStart(self):
+    def gameStart(self, channel):
         players = self.game.rollRoles()
-        self.rollDay()
+        self.rollDay(channel)
+        # TODO - game start and role flavour
 
-    def rollDay(self):
+    def rollDay(self, channel):
         """Roll a new day phase."""
-        round = self.game.nextRound()
         self.newPhaseAct()
         self.game.setDay()
-        #TODO - implement flavour
+        majority = self.game.getMajority()
+        p_num = self.game.numPlayers()
+        r = self.game.nextRound()
+
+        # Day flavour
+        msg = "Another day rises on the townsfolk."
+        self.msg(channel, msg)
+        self.newDayDeathFlav()
+        msg = ("It is now Day {}. With {} people alive, ".format(r, p_num) +
+               "it will take {} votes for majority to be ".format(majority) +
+               "reached.")
+        self.msg(channel, msg)
+        
 
     def newPhaseAct(self):
         """Performs actions required at the start of every phase."""
@@ -545,9 +558,13 @@ class MafiaBot(irc.IRCClient):
         if vict is not None:
             # Victory achieved
             self.victory()
+            # TODO - will need to terminate out of enveloping functions
 
     def victory(self):
         """Winning proceedings."""
+        pass
+
+    def newDayDeathFlav(self):
         pass
             
 
