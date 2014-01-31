@@ -1,14 +1,9 @@
 # TODO - override notices?
 # TODO - !help or /msg HELP etc.
-# TODO - check getEtc. rather than etc.
 # TODO - manage if a player d/cs or is kicked
-# TODO - allow for reconnection? Reset game? Continue game but check integrity?
 # TODO - more generic block of private actions - command whitelist?
 # - split phase
 # TODO - put self.nickname.lower() == channel into a function
-# TODO - instead of calling privmsg, make a function and call that
-# (ex. !restart and !end)
-# TODO - rewrite how player name data is stored, so it maintains case
 
 """
 
@@ -60,15 +55,15 @@ class MafiaGame:
         self.gop = ""
         self.round = 0
         self.actions = 0
-        self.nl_alias = ["nobody", "no-one", "noone", "no lynch"]
+        self.nl_alias = ["nobody", "no-one", "noone", "no_lynch"]
         self.nl_voted = []
         self.phase = self.INITIAL
 
     def newGame(self, user):
         """Start a new game."""
         self.phase = self.SIGN_UP
-        self.gop = user
-        self.players[user] = Player()
+        self.gop = user.lower()
+        self.players[self.gop] = Player()
 
     def commands(self):
         """Returns a list of currently available commands and how to use
@@ -129,6 +124,8 @@ class MafiaGame:
 
     def transferGop(self, user, target):
         """Transfer GOP to a target player."""
+        user = user.lower()
+        target = target.lower()
         if user == self.gop and target in self.players:
             self.gop = target
             return True
@@ -147,6 +144,7 @@ class MafiaGame:
 
     def join(self, user):
         """Adds a player to the player list, if not already in it."""
+        user = user.lower()
         if user not in self.players:
             self.players[user] = Player()
             return True
@@ -155,6 +153,7 @@ class MafiaGame:
 
     def leave(self, user):
         """Removes a player from the player list, if possible."""
+        user = user.lower()
         if user in self.players:
             del self.players[user]
             return True
@@ -172,7 +171,7 @@ class MafiaGame:
 
     def isGop(self, user):
         """Determine if the user is GOP."""
-        return user == self.gop
+        return user.lower() == self.gop
 
     def roleGen(self):
         """Generate player roles, and return them."""
@@ -291,6 +290,9 @@ class MafiaGame:
         """Adds a vote to target player. Return True if the target player was
         lynched after this vote, else return False."""
 
+        user = user.lower()
+        target = target.lower()
+
         # Check player exists
         if target not in self.nl_alias and target not in self.players:
             raise "Player {} not found when assigning vote.".format(target)
@@ -358,31 +360,24 @@ class MafiaBot(irc.IRCClient):
 
         # Usernames are stored in lowercase, but the original input needs to be
         # kept for message outputs
-        user_orig = user.split('!', 1)[0]
-        user = user_orig.lower()
+        user = user.split('!', 1)[0]
 
-        # Check if it is a command
+        # Check for a command
         if msg.startswith('!'):
-            command_orig = msg[1:]
-        elif msg.startswith(user + ": !"):
-            command_orig = msg[len(user) + 4:]
-        elif msg.startswith(user + ":!"):
-            command_orig = msg[len(user) + 3]
+            line = msg[1:]
         else:
-            return;
+            return
 
         # Check if a second argument has been provided
         try:
-            target = command_orig.lower().split()[1]
-            target_orig = command_orig.split()[1]
+            target = line.split()[1]
         except:
             target = ""
-            target_orig = ""
 
         # For commands where parameters may be outputted, the original input
         # needs to be kept
-        command = command_orig.lower().split()[0]
-        
+        command = line.lower().split()[0]
+
         # Interpret command
         if command == "new":
             # Attempt to begin a new game
@@ -432,7 +427,7 @@ class MafiaBot(irc.IRCClient):
                 if self.game.end(user):
                     # Success
                     msg = ("The game has been closed early by request of "
-                           + user_orig + ". Thanks for playing!")
+                           + user + ". Thanks for playing!")
                 else:
                     msg = ("Failed to end the game. Are you sure that a game "
                            "is running, and that you're the GOP?")
@@ -450,7 +445,7 @@ class MafiaBot(irc.IRCClient):
                 if self.game.end(user):
                     # Success
                     msg = ("The game has been closed early by request of "
-                           + user_orig + ". Thanks for playing!")
+                           + user + ". Thanks for playing!")
                     restart = 1
                 else:
                     msg = ("Failed to restart the game. Are you sure that a game "
@@ -471,14 +466,14 @@ class MafiaBot(irc.IRCClient):
             if target and self.game.transferGop(user, target):
                 # Success
                 msg = ("GOP has been transferred from "
-                       "{} to {}.".format(user_orig, target_orig))
+                       "{} to {}.".format(user, target))
             elif not target:
                 # Second argument not provided
                 msg = "Failed as no player name was provided."
             else:
                 # Other failure
                 msg = ("Failed to transfer GOP. Are you sure you have GOP, "
-                        "and that the player '{}' exists?".format(target_orig))
+                        "and that the player '{}' exists?".format(target))
             self.msg_send(self.nickname, channel, user, msg)
 
         elif command == "alive":
@@ -501,14 +496,14 @@ class MafiaBot(irc.IRCClient):
                 if (self.game.join(user) and
                     self.game.numPlayers() <= self.MAX_PLAYERS):
                     # Joined!
-                    msg = "{} has joined the game.".format(user_orig)
+                    msg = "{} has joined the game.".format(user)
                 elif self.game.numPlayers() > self.MAX_PLAYERS:
                     # Too many players
                     msg = ("{} failed to join the game as the game capacity "
                            "reached the cap.")
                 else:
                     # Already signed up
-                    msg = ("Failed to join the game, as {} ".format(user_orig)
+                    msg = ("Failed to join the game, as {} ".format(user)
                            + "has already entered.")
             elif self.nickname.lower() == channel:
                     # Can't sign up privately
@@ -525,7 +520,7 @@ class MafiaBot(irc.IRCClient):
                 gop = self.game.isGop(user)
                 if self.game.leave(user):
                     # Left!
-                    msg = "{} has left the game.".format(user_orig)
+                    msg = "{} has left the game.".format(user)
                     if self.game.numPlayers() == 0:
                         # Players remaining?
                         msg += (" As there are no players left the "
@@ -537,7 +532,7 @@ class MafiaBot(irc.IRCClient):
                         msg += " {} is now GOP.".format(n_gop)
                 else:
                     # Not in game
-                    msg = ("Failed to leave the game, as {} ".format(user_orig)
+                    msg = ("Failed to leave the game, as {} ".format(user)
                            + "has not entered it.")
             elif self.nickname.lower() == channel:
                     # Can't sign up privately
@@ -571,8 +566,9 @@ class MafiaBot(irc.IRCClient):
             self.msg_send(self.nickname, channel, user, msg)
         elif command == "vote":
             # Change one's vote
-            exist = (target in self.game.getLivingPlayers() or
-                     target in self.game.getNoLynchAliases())
+            # TODO - move the next line into its own function
+            exist = (target.lower() in self.game.getLivingPlayers() or
+                     target.lower() in self.game.getNoLynchAliases())
             lynched = False
             if self.nickname.lower() == channel:
                 # Can't start via private message
@@ -583,7 +579,7 @@ class MafiaBot(irc.IRCClient):
             elif not exist:
                 # Target not found
                 msg = ("Invalid voted. Player "
-                       "'{}' not found.".format(target_orig))
+                       "'{}' not found.".format(target))
             else:
                 lynched = self.game.addVote(target, user)
                 msg = ""
