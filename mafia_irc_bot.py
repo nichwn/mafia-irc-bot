@@ -4,6 +4,7 @@
 # TODO - manage if a player d/cs or is kicked
 # TODO - allow for reconnection? Reset game? Continue game but check integrity?
 # TODO - more generic block of private actions - command whitelist?
+# - split phase
 # TODO - put self.nickname.lower() == channel into a function
 # TODO - instead of calling privmsg, make a function and call that
 # (ex. !restart and !end)
@@ -59,6 +60,8 @@ class MafiaGame:
         self.gop = ""
         self.round = 0
         self.actions = 0
+        self.nl_alias = ["nobody", "no-one", "noone", "no lynch"]
+        self.nl_voted = []
         self.phase = self.INITIAL
 
     def newGame(self, user):
@@ -122,6 +125,7 @@ class MafiaGame:
         self.phase = self.INITIAL
         self.round = 0
         self.actions = 0
+        self.nl_voted = []
 
     def transferGop(self, user, target):
         """Transfer GOP to a target player."""
@@ -134,9 +138,9 @@ class MafiaGame:
     def getLivingPlayers(self):
         """Return a list of all living players."""
         alive = []
-        for data in self.players.values():
+        for k, v in self.players.iteritems():
             # Iterate through all the players
-            if data.state == "alive":
+            if v.state == "alive":
                 # Living player found
                 alive.append(k)
         return alive
@@ -209,7 +213,7 @@ class MafiaGame:
     def roleDist(self, roles):
         """Distribute roles to players."""
         # Assign roles
-        random.shuffle(roles)  # TODO - check documentation
+        random.shuffle(roles)
         i = 0
         for p in self.players:
             self.players[p].role = roles[i]
@@ -262,12 +266,58 @@ class MafiaGame:
         return self.majority
 
     def getMafia(self):
-        """Returns a list of people with the alignment, 'Mafia'."""
+        """Returns a list of players with the alignment, 'Mafia'."""
         mafia = []
         for player, data in self.players.iteritems():
             if data.role.alignment == "Mafia":
                 mafia.append(player)
         return mafia
+
+    def resVote(self, target):
+        """Return True if the target player has been lynched, else False."""
+        # Voted for a player
+        if target in self.players:
+            if len(self.players[target].voted_by) >= self.majority:
+                return True
+            
+        # Voted for 'No Lynch'
+        else:
+            if len(self.nl_voted) >= self.majority:
+                return True
+
+        return False
+
+    def addVote(self, target, user):
+        """Adds a vote to target player. Return True if the target player was
+        lynched after this vote, else return False."""
+
+        # Check player exists
+        if target not in self.nl_alias and target not in self.players:
+            raise "Player {} not found when assigning vote.".format(target)
+
+        # Remove previous vote, if any
+        old = self.players[user].vote
+        if old is not None and old not in self.nl_alias:
+            # Previously voted for a player
+            self.players[old].voted_by.remove(user)
+        elif old is not None:
+            # Previously voted for 'No Lynch'
+            self.nl_voted.remove(user)
+
+        # Add new vote
+        self.players[user].vote = target
+        if target not in self.nl_alias:
+            # Voted for a player
+            self.players[target].voted_by.append(user)
+        else:
+            # Voted for 'No Lynch'
+            self.nl_voted.append(user)
+            
+        return self.resVote(target)
+
+    def getNoLynchAliases(self):
+        """Return a list of aliases for 'No Lynch'."""
+        return self.nl_alias
 
 
 class MafiaBot(irc.IRCClient):
@@ -277,7 +327,7 @@ class MafiaBot(irc.IRCClient):
     password = None  # TODO - make an argument parameter
     sourceURL = ""  # TODO - fill in later
 
-    MIN_PLAYERS = 1
+    MIN_PLAYERS = 1  # DEBUG TODO - set to 1 for debugging purposes - set to 5
     MAX_PLAYERS = 12
 
 
@@ -321,9 +371,17 @@ class MafiaBot(irc.IRCClient):
         else:
             return;
 
+        # Check if a second argument has been provided
+        try:
+            target = command_orig.lower().split()[1]
+            target_orig = command_orig.split()[1]
+        except:
+            target = ""
+            target_orig = ""
+
         # For commands where parameters may be outputted, the original input
         # needs to be kept
-        command = command_orig.lower()
+        command = command_orig.lower().split()[0]
         
         # Interpret command
         if command == "new":
@@ -410,14 +468,6 @@ class MafiaBot(irc.IRCClient):
 
         elif command[:3] == "gop":
             # Request to transfer GOP
-
-            # Check if a second argument has been provided
-            try:
-                target = command.split()[1]
-                target_orig = command_orig.split()[1]
-            except:
-                target = ""
-
             if target and self.game.transferGop(user, target):
                 # Success
                 msg = ("GOP has been transferred from "
@@ -519,7 +569,31 @@ class MafiaBot(irc.IRCClient):
                 # Can't start via private message
                 msg = ("You cannot use this command via PM.")
             self.msg_send(self.nickname, channel, user, msg)
+        elif command == "vote":
+            # Change one's vote
+            exist = (target in self.game.getLivingPlayers() or
+                     target in self.game.getNoLynchAliases())
+            lynched = False
+            if self.nickname.lower() == channel:
+                # Can't start via private message
+                msg = ("You cannot use this command via PM.")
+            elif self.game.getPhase() != self.game.getDay():
+                # Day phase only command
+                msg = "This command can only be used in the Day Phase."
+            elif not exist:
+                # Target not found
+                msg = ("Invalid voted. Player "
+                       "'{}' not found.".format(target_orig))
+            else:
+                lynched = self.game.addVote(target, user)
+                msg = ""
+            self.msg_send(self.nickname, channel, user, msg)
 
+            # Someone lynched? # TODO - up to here
+            if lynched != False:
+                # Vote is sufficient to lynch someone
+                self.rollNight(channel, target)
+        
         # TODO - add more commands
 
     def irc_NICK(self, prefix, params):
@@ -606,6 +680,10 @@ class MafiaBot(irc.IRCClient):
 
             self.msg(p_name, msg)
 
+    def rollNight(self, channel, target):
+        """Rolls a new night phase."""
+        pass
+
 
 class MafiaBotFactory(protocol.ClientFactory):
     """A factory for MafiaBots."""
@@ -623,7 +701,7 @@ class MafiaBotFactory(protocol.ClientFactory):
         reactor.stop()
 
     def clientConnectionFailed(self, connector, reason):
-        print "connection failed:", reason
+        "connection failed:", reason
         reactor.stop()
 
 
@@ -632,7 +710,7 @@ if __name__ == '__main__':
     bot = MafiaBotFactory("mtest")
 
     # Connect factory to this host and port
-    reactor.connectTCP("irc.vision-irc.net", 6667, bot)
+    reactor.connectTCP("irc.mibbit.com", 6667, bot)
 
     # Run bot
     reactor.run()
