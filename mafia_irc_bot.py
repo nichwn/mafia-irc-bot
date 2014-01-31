@@ -1,9 +1,6 @@
 # TODO - override notices?
 # TODO - !help or /msg HELP etc.
 # TODO - manage if a player d/cs or is kicked
-# TODO - more generic block of private actions - command whitelist?
-# - split phase
-# TODO - put self.nickname.lower() == channel into a function
 
 """
 
@@ -59,17 +56,20 @@ class MafiaGame:
         self.nl_voted = []
         self.phase = self.INITIAL
 
+
     def newGame(self, user):
         """Start a new game."""
         self.phase = self.SIGN_UP
         self.gop = user.lower()
         self.players[self.gop] = Player()
 
+
     def commands(self):
         """Returns a list of currently available commands and how to use
         them."""
         # TODO - implement
         pass
+
 
     def getPhase(self):
         """Returns a flag that indicates the current phase. It's guaranteed
@@ -78,12 +78,14 @@ class MafiaGame:
         Initial < Sign_Up < Day < Night"""
         return self.phase
 
+
     def getInitial(self):
         """Returns a flag that indicates the initial phase. It's guaranteed
         that the flag values are in the order of:
 
         Initial < Sign_Up < Day < Night"""
         return self.INITIAL
+
 
     def getSign_Up(self):
         """Returns a flag that indicates the sign_up phase. It's guaranteed
@@ -92,6 +94,7 @@ class MafiaGame:
         Initial < Sign_Up < Day < Night"""
         return self.SIGN_UP
 
+
     def getDay(self):
         """Returns a flag that indicates the day phase. It's guaranteed
         that the flag values are in the order of:
@@ -99,12 +102,14 @@ class MafiaGame:
         Initial < Sign_Up < Day < Night"""
         return self.DAY
 
+
     def getNight(self):
         """Returns a flag that indicates the night phase. It's guaranteed
         that the flag values are in the order of:
 
         Initial < Sign_Up < Day < Night"""
         return self.NIGHT
+
 
     def end(self, user):
         """Attempts to end the game. Return True if the game was ended."""
@@ -114,6 +119,7 @@ class MafiaGame:
         else:
             return False
 
+
     def gameClear(self):
         """Clears the game data in preparation for a new game."""
         self.players = {}
@@ -121,6 +127,7 @@ class MafiaGame:
         self.round = 0
         self.actions = 0
         self.nl_voted = []
+
 
     def transferGop(self, user, target):
         """Transfer GOP to a target player."""
@@ -132,6 +139,7 @@ class MafiaGame:
         else:
             return False
 
+
     def getLivingPlayers(self):
         """Return a list of all living players."""
         alive = []
@@ -142,6 +150,7 @@ class MafiaGame:
                 alive.append(k)
         return alive
 
+
     def join(self, user):
         """Adds a player to the player list, if not already in it."""
         user = user.lower()
@@ -150,6 +159,7 @@ class MafiaGame:
             return True
         else:
             return False
+
 
     def leave(self, user):
         """Removes a player from the player list, if possible."""
@@ -160,18 +170,22 @@ class MafiaGame:
         else:
             return False
 
+
     def numPlayers(self):
         """Determines if there are players left."""
         return len(self.players)
+
 
     def newGop(self):
         """Changes the new GOP."""
         self.gop = self.players.keys()[0]
         return self.gop
 
+
     def isGop(self, user):
         """Determine if the user is GOP."""
         return user.lower() == self.gop
+
 
     def roleGen(self):
         """Generate player roles, and return them."""
@@ -209,6 +223,7 @@ class MafiaGame:
 
         return roles
 
+
     def roleDist(self, roles):
         """Distribute roles to players."""
         # Assign roles
@@ -221,23 +236,28 @@ class MafiaGame:
         # The mafia as a whole has one action
         self.actions += 1
 
+
     def rollRoles(self):
         """Determines peoples roles."""
         roles = self.roleGen()
         self.roleDist(roles)
 
+
     def getPlayers(self):
         """Returns player data as a dict."""
         return self.players
+
 
     def nextRound(self):
         """Increments the round number, and returns it."""
         self.round += 1
         return self.round
 
+
     def setDay(self):
         """Sets the game status to 'Day'."""
         self.phase = self.DAY
+
 
     def clear(self):
         """Clears data that doesn't need to be kept between phases."""
@@ -245,6 +265,7 @@ class MafiaGame:
             self.players[p].vote = None
             self.players[p].voted_by = []
             self.players[p].role.ab_target = None
+
 
     def detVictory(self):
         """Determines if an alignment has won. Return None if no alignment has.
@@ -258,11 +279,13 @@ class MafiaGame:
                     return None
         return align[0]
 
+
     def getMajority(self):
         """Determine and return majority."""
         # Majority is > 50%, which can be determined by total / 2 + 1
-        self.majority = len(self.players) / 2 + 1
+        self.majority = self.numPlayers() / 2 + 1
         return self.majority
+
 
     def getMafia(self):
         """Returns a list of players with the alignment, 'Mafia'."""
@@ -271,6 +294,7 @@ class MafiaGame:
             if data.role.alignment == "Mafia":
                 mafia.append(player)
         return mafia
+
 
     def resVote(self, target):
         """Return True if the target player has been lynched, else False."""
@@ -285,6 +309,7 @@ class MafiaGame:
                 return True
 
         return False
+
 
     def addVote(self, target, user):
         """Adds a vote to target player. Return True if the target player was
@@ -317,6 +342,7 @@ class MafiaGame:
             
         return self.resVote(target)
 
+
     def getNoLynchAliases(self):
         """Return a list of aliases for 'No Lynch'."""
         return self.nl_alias
@@ -339,6 +365,7 @@ class MafiaBot(irc.IRCClient):
         irc.IRCClient.connectionMade(self)
         self.game = MafiaGame()
 
+
     def connectionLost(self, reason):
         irc.IRCClient.connectionLost(self, reason)
 
@@ -349,11 +376,13 @@ class MafiaBot(irc.IRCClient):
         """After connecting to the server, join the channel."""
         self.join(self.factory.channel)
 
+
     def joined(self, channel):
         """After joining a channel, output a greeting."""
         msg = ("I'm a bot which manages mafia games. /say or PM me !help for "
                "help.")
         self.msg(channel, msg)
+
 
     def privmsg(self, user, channel, msg):
         """Parse and interpret commands."""
@@ -376,230 +405,267 @@ class MafiaBot(irc.IRCClient):
 
         # For commands where parameters may be outputted, the original input
         # needs to be kept
-        command = line.lower().split()[0]
+        farg = line.lower().split()[0]
 
-        # Interpret command
-        if command == "new":
-            # Attempt to begin a new game
-            if (channel != self.nickname.lower() and
-                self.game.getPhase() == self.game.getInitial()):
-                # Begin a new game
-                self.game.newGame(user)
-                msg = ("A new mafia game has begun! Type !join to join. There "
-                       "is a minimum of {}, and ".format(self.MIN_PLAYERS) +
-                       "a maximum of {} players ".format(self.MAX_PLAYERS) +
-                       "that can play.\nThe game starter has been given Game "
-                       "Operator (GOP) status and can commence the game by "
-                       "typing !start.")
+        # Interpret the entire command
+        self.runCommand(farg, target, user, channel)
 
-            elif self.game.getPhase() != self.game.getInitial():
-                # Can't begin a new game as one is already in progress
-                msg = ("A game is already in progress. Wait for it to finish "
-                       "before starting a new one.\nIf you'd like to end a "
-                       "game early, you can type !end to end the game, or "
-                       "!restart to restart the game if you're the GOP.")
 
-            else:
-                # Can't begin a new game, as we don't know what channel to play
-                # it in
-                msg = ("You can't start a game with a PM. Please try again "
-                       "in the channel you'd like to play in.")
-            self.msg_send(self.nickname, channel, user, msg)
+    def runCommand(self, farg, target, user, channel):
+        """Interprets and runs a given command."""
+        if channel == self.nickname.lower():
+            # Privately sent command
+            self.comsPrivate(farg, target, user, channel)
+        else:
+            # Publicly sent command:
+            self.comsPublic(farg, target, user, channel)
 
-        elif command == "help":
-            # Help requested. Output usable commands.
-            # TODO - implement
-            curr_phase = self.game.getPhase()
-            if curr_phase == self.game.getInitial():
-                pass
-            elif curr_phase == self.game.getSign_Up():
-                pass
-            elif curr_phase == self.game.getDay():
-                pass
-            elif curr_phase == self.game.getNight():
-                pass
-            # TODO - also print out 'anytime' commands
 
-        elif command == "end":
-            # Attempt to end the game
-            if (channel != self.nickname.lower() and
-                self.game.getPhase() != self.game.getInitial()):
-                if self.game.end(user):
-                    # Success
-                    msg = ("The game has been closed early by request of "
-                           + user + ". Thanks for playing!")
-                else:
-                    msg = ("Failed to end the game. Are you sure that a game "
-                           "is running, and that you're the GOP?")
-            elif channel == self.nickname.lower():
-                msg = ("This command cannot be sent via PM.")
-            else:
-                msg = ("You can't end a game that hasn't started!")
-            self.msg_send(self.nickname, channel, user, msg)
+    def comsPrivate(self, farg, target, user, channel):
+        """Interprets and runs private commands."""
+        if farg == "help":
+            comHelp(user, channel)
 
-        elif command == "restart":
-            # Attempt to restart the game
-            restart = 0
-            if (channel != self.nickname.lower() and
-                self.game.getPhase() != self.game.getInitial()):
-                if self.game.end(user):
-                    # Success
-                    msg = ("The game has been closed early by request of "
-                           + user + ". Thanks for playing!")
-                    restart = 1
-                else:
-                    msg = ("Failed to restart the game. Are you sure that a game "
-                           "is running, and that you're the GOP?")
-            elif channel == self.nickname.lower():
-                msg = ("This command cannot be sent via PM.")
-            else:
-                msg = ("You can't end a game that hasn't started!")
-            self.msg_send(self.nickname, channel, user, msg)
 
-            if restart:
-                # Begin a new game
-                msg = "!new"
-                self.privmsg(user, channel, msg)
+    def comHelp(self, user, channel):
+        """Gives help messages to the user."""
+        curr_phase = self.game.getPhase()
+        if curr_phase == self.game.getInitial():
+            pass
+        elif curr_phase == self.game.getSign_Up():
+            pass
+        elif curr_phase == self.game.getDay():
+            pass
+        elif curr_phase == self.game.getNight():
+            pass
+        # TODO - also print out 'anytime' commands
 
-        elif command[:3] == "gop":
-            # Request to transfer GOP
-            if target and self.game.transferGop(user, target):
-                # Success
-                msg = ("GOP has been transferred from "
-                       "{} to {}.".format(user, target))
-            elif not target:
-                # Second argument not provided
-                msg = "Failed as no player name was provided."
-            else:
-                # Other failure
-                msg = ("Failed to transfer GOP. Are you sure you have GOP, "
-                        "and that the player '{}' exists?".format(target))
-            self.msg_send(self.nickname, channel, user, msg)
 
-        elif command == "alive":
-            # Not yet tested, as there's no way to start the game yet. A bit
-            # dumb to have written it at this stage I'll admit.
-            if self.game.getPhase() > self.game.getSign_Up():
-                # Game active, so determine living players
-                msg = "Players alive:"
-                for player in self.game.getLivingPlayers():
-                        msg += '\n' + player
-            else:
-                # Game inactive
-                msg = "No game is running."
-            self.msg_send(self.nickname, channel, user, msg)
-
-        elif command == "join":
-            #Attempt to join a new game.
-            if (self.game.getPhase() == self.game.getSign_Up()
-                and self.nickname.lower() != channel):
-                if (self.game.join(user) and
-                    self.game.numPlayers() <= self.MAX_PLAYERS):
-                    # Joined!
-                    msg = "{} has joined the game.".format(user)
-                elif self.game.numPlayers() > self.MAX_PLAYERS:
-                    # Too many players
-                    msg = ("{} failed to join the game as the game capacity "
-                           "reached the cap.")
-                else:
-                    # Already signed up
-                    msg = ("Failed to join the game, as {} ".format(user)
-                           + "has already entered.")
-            elif self.nickname.lower() == channel:
-                    # Can't sign up privately
-                    msg = "You can't join a game via PM."
-            else:
-                # Wrong phase
-                msg = "You can't join the game right now."
-            self.msg_send(self.nickname, channel, user, msg)
-
-        elif command == "leave":
-            #Attempt to leave a new game.
-            if (self.game.getPhase() == self.game.getSign_Up()
-                and self.nickname.lower() != channel):
-                gop = self.game.isGop(user)
-                if self.game.leave(user):
-                    # Left!
-                    msg = "{} has left the game.".format(user)
-                    if self.game.numPlayers() == 0:
-                        # Players remaining?
-                        msg += (" As there are no players left the "
-                                "game has been closed.")
-                        self.game.gameClear()
-                    elif gop:
-                        # Leaving playing was GOP. Select a new one.
-                        n_gop = self.game.newGop()
-                        msg += " {} is now GOP.".format(n_gop)
-                else:
-                    # Not in game
-                    msg = ("Failed to leave the game, as {} ".format(user)
-                           + "has not entered it.")
-            elif self.nickname.lower() == channel:
-                    # Can't sign up privately
-                    msg = "You can't leave a game via PM."
-            else:
-                # Wrong phase
-                msg = "You can't leave the game right now."
-            self.msg_send(self.nickname, channel, user, msg)
-
-        elif command == "start":
-            n_players = self.game.numPlayers()
-            if (self.game.isGop(user) and
-                self.MIN_PLAYERS <= n_players and
-                self.nickname.lower() != channel):
-                # Closes sign ups and begins the game
-                msg = ("Sign ups have been closed, and the game will begin "
-                       "shortly. You should be receiving your roles now.")
-                self.gameStart(channel)
-                return
-            elif not self.game.isGop(user):
-                # Only GOP can use this command
-                msg = "Only the GOP can use this command."
-            elif self.MIN_PLAYERS > n_players:
-                # Not enough players
-                msg = ("Insufficient number of players. The minimum number "
-                       "is {} and there is/are only ".format(self.MIN_PLAYERS) +
-                       "{} player(s) signed up.".format(n_players))
-            else:
-                # Can't start via private message
-                msg = ("You cannot use this command via PM.")
-            self.msg_send(self.nickname, channel, user, msg)
-        elif command == "vote":
-            # Change one's vote
-            # TODO - move the next line into its own function
-            exist = (target.lower() in self.game.getLivingPlayers() or
-                     target.lower() in self.game.getNoLynchAliases())
-            lynched = False
-            if self.nickname.lower() == channel:
-                # Can't start via private message
-                msg = ("You cannot use this command via PM.")
-            elif self.game.getPhase() != self.game.getDay():
-                # Day phase only command
-                msg = "This command can only be used in the Day Phase."
-            elif not exist:
-                # Target not found
-                msg = ("Invalid voted. Player "
-                       "'{}' not found.".format(target))
-            else:
-                lynched = self.game.addVote(target, user)
-                msg = ""
-            self.msg_send(self.nickname, channel, user, msg)
-
-            # Someone lynched? # TODO - up to here
-            if lynched != False:
-                # Vote is sufficient to lynch someone
-                self.rollNight(channel, target)
+    def comsPublic(self, farg, target, user, channel):
+        """Interprets and runs public commands."""
         
-        # TODO - add more commands
+        """#  TODO - preparation for upcoming interface modifications
+        # All public commands must start with a '!' to distinguish them from
+        # other messages
+        if not farg.startswith('!'):  
+            return
+        else:
+            farg = farg[1:]"""
+
+        # Run the command
+        if farg == "new":
+            self.comNew(user, channel)
+        elif farg == "end":
+            self.comEnd(user, channel)
+        elif farg == "restart":
+            self.comRestart(user, channel)
+        elif farg == "gop":
+            self.comGop(target, user, channel)
+        elif farg == "alive":
+            self.comAlive(user, channel)
+        elif farg == "join":
+            self.comJoin(user, channel)
+        elif farg == "leave":
+            self.comLeave(user, channel)
+        elif farg == "start":
+            self.comStart(user, channel)
+        elif farg == "vote":
+            self.comVote(target, user, channel)
+
+
+    def comNew(self, user, channel):
+        """Attempts to begin a new game."""
+
+        # Begin a new game
+        if self.game.getPhase() == self.game.getInitial():
+            
+            self.game.newGame(user)
+            msg = ("A new mafia game has begun! Type !join to join. There "
+                   "is a minimum of {}, and ".format(self.MIN_PLAYERS) +
+                   "a maximum of {} players ".format(self.MAX_PLAYERS) +
+                   "that can play.\nThe game starter has been given Game "
+                   "Operator (GOP) status and can commence the game by "
+                   "typing !start.")
+
+        # Can't begin a new game as one is already in progress
+        else:
+            msg = ("A game is already in progress. Wait for it to finish "
+                   "before starting a new one.\nIf you'd like to end a "
+                   "game early, you can type !end to end the game, or "
+                   "!restart to restart the game if you're the GOP.")
+        self.msg_send(self.nickname, channel, user, msg)
+
+
+    def comEnd(self, user, channel):
+        """Attempt to end the game."""
+        if self.game.getPhase() != self.game.getInitial() and self.game.end(user):
+            # Success
+            msg = ("The game has been closed early by request of "
+                   + user + ". Thanks for playing!")
+        elif self.game.getPhase() == self.game.getInitial():
+            msg = "You can't end a game that hasn't started!"
+        else:
+            msg = ("Failed to end the game. Are you sure that a game "
+                   "is running, and that you're the GOP?")
+        self.msg_send(self.nickname, channel, user, msg)
+
+
+    def comRestart(self, user, channel):
+        """Attempt to restart the game."""
+        restart = 0
+        if (self.game.getPhase() != self.game.getInitial() and
+            self.game.end(user)):
+            # Success
+            msg = ("The game has been closed early by request of "
+                   + user + ". Thanks for playing!")
+            restart = 1
+        elif self.game.getPhase() == self.game.getInitial():
+            msg = "You can't end a game that hasn't started!"
+        else:
+            msg = ("Failed to restart the game. Are you sure that a game "
+                   "is running, and that you're the GOP?")
+        self.msg_send(self.nickname, channel, user, msg)
+
+        if restart:
+            # Begin a new game
+            msg = "!new"
+            self.privmsg(user, channel, msg)
+
+
+    def comGop(self, target, user, channel):
+        """Request to transfer GOP."""
+        if target and self.game.transferGop(user, target):
+            # Success
+            msg = ("GOP has been transferred from "
+                   "{} to {}.".format(user, target))
+        elif not target:
+            msg = "Failed as no player name was provided."
+        else:
+            msg = ("Failed to transfer GOP. Are you sure you have GOP, "
+                    "and that the player '{}' exists?".format(target))
+        self.msg_send(self.nickname, channel, user, msg)
+
+
+    def comAlive(self, user, channel):
+        """Lists out the names of all living players."""
+        # Not yet tested, as there's no way to start the game yet. A bit
+        # dumb to have written it at this stage I'll admit.
+        if self.game.getPhase() > self.game.getSign_Up():
+            # Game active, so determine living players
+            msg = "Players alive:"
+            for player in self.game.getLivingPlayers():
+                    msg += '\n' + player
+        else:
+            # Game inactive
+            msg = ("Failed, as this command only works during the main "
+                   "section of the game."
+        self.msg_send(self.nickname, channel, user, msg)
+
+
+    def comJoin(self, user, channel):
+        """Attempt to join a new game."""
+        if (self.game.numPlayers() <= self.MAX_PLAYERS and
+            self.game.getPhase() == self.game.getSign_Up() and
+            self.game.join(user)):
+            
+            # Joined!
+            msg = "{} has joined the game.".format(user)
+        elif self.game.numPlayers() > self.MAX_PLAYERS:
+            # Too many players
+            msg = ("{} failed to join the game as the game capacity "
+                   "reached the cap.")
+        elif self.game.getPhase() != self.game.getSign_Up():
+            # Wrong phase
+            msg = "Failed to join as sign-ups aren't open."
+        else:
+            # Already signed up
+            msg = ("Failed to join the game, as {} ".format(user)
+                   + "has already entered.")
+        self.msg_send(self.nickname, channel, user, msg)
+
+
+    def comLeave(self, user, channel):
+        """Attempt to leave a new game."""
+        gop = self.game.isGop(user)
+        if (self.game.getPhase() == self.game.getSign_Up() and
+            self.game.leave(user)):
+            
+            # Left!
+            msg = "{} has left the game.".format(user)
+            if self.game.numPlayers() == 0:
+                # Players remaining?
+                msg += (" As there are no players left the "
+                        "game has been closed.")
+                self.game.gameClear()
+            elif gop:
+                # Leaving playing was GOP. Select a new one.
+                n_gop = self.game.newGop()
+                msg += " {} is now GOP.".format(n_gop)
+                
+        elif self.game.getPhase() != self.game.getSign_Up():
+            # Wrong phase
+            msg = "Failed as you can only leave the game during sign-ups."
+        else:
+            # Not in game
+            msg = ("Failed to leave the game, as {} ".format(user)
+                   + "has not entered it.")
+        self.msg_send(self.nickname, channel, user, msg)
+
+
+    def comStart(self, user, channel):
+        """Attempt to close sign-ups and start the game."""
+        n_players = self.game.numPlayers()
+        if (self.game.isGop(user) and
+            self.MIN_PLAYERS <= n_players):
+            # Closes sign ups and begins the game
+            msg = ("Sign ups have been closed, and the game will begin "
+                   "shortly. You should be receiving your roles now.")
+            self.gameStart(channel)
+            return
+        elif not self.game.isGop(user):
+            # Only GOP can use this command
+            msg = "Only the GOP can use this command."
+        else:
+            # Not enough players
+            msg = ("Insufficient number of players. The minimum number "
+                   "is {} and there is/are only ".format(self.MIN_PLAYERS) +
+                   "{} player(s) signed up.".format(n_players))
+        self.msg_send(self.nickname, channel, user, msg)
+    
+
+    def comVote(self, target, user, channel):
+        """Change a player's vote target."""
+        # TODO - move the next line into its own function
+        exist = (target.lower() in self.game.getLivingPlayers() or
+                 target.lower() in self.game.getNoLynchAliases())
+        lynched = False
+        if self.game.getPhase() != self.game.getDay():
+            # Day phase only command
+            msg = "This command can only be used in the Day Phase."
+        elif not exist:
+            # Target not found
+            msg = ("Invalid voted. Player "
+                   "'{}' not found.".format(target))
+        else:
+            lynched = self.game.addVote(target, user)
+            msg = ""
+        self.msg_send(self.nickname, channel, user, msg)
+
+        # Someone lynched?
+        if lynched != False:
+            # Vote is sufficient to lynch someone
+            self.rollNight(channel, target)
+
 
     def irc_NICK(self, prefix, params):
         """Called when an IRC user changes their nickname."""
         old_nick = prefix.split('!')[0]
         new_nick = params[0]
-        # TODO - change name in player lists etc.
+        # TODO - change name in player lists, data, votes, voted etc.
 
 
         # Other functions
+
 
     def msg_send(self, nickname, channel, user, msg):
         """Determines where to send a message, and sends it."""
@@ -610,11 +676,13 @@ class MafiaBot(irc.IRCClient):
             # Channel
             self.msg(channel, msg)
 
+
     def gameStart(self, channel):
         self.game.rollRoles()
         self.outRoles()
         self.rollDay(channel)
         # TODO - game start flavour
+
 
     def rollDay(self, channel):
         """Roll a new day phase."""
@@ -643,12 +711,15 @@ class MafiaBot(irc.IRCClient):
             self.victory()
             # TODO - will need to terminate out of enveloping functions
 
+
     def victory(self):
         """Winning proceedings."""
         pass
 
+
     def newDayDeathFlav(self):
         pass
+
 
     def outRoles(self):
         """Gives players their role information."""
@@ -676,6 +747,7 @@ class MafiaBot(irc.IRCClient):
 
             self.msg(p_name, msg)
 
+
     def rollNight(self, channel, target):
         """Rolls a new night phase."""
         pass
@@ -687,14 +759,17 @@ class MafiaBotFactory(protocol.ClientFactory):
     def __init__(self, channel):
         self.channel = channel
 
+
     def buildProtocol(self, addr):
         bot = MafiaBot()
         bot.factory = self
         return bot
 
+
     def clientConnectionLost(self, connector, reason):
         """If we get disconnected, terminate the program."""
         reactor.stop()
+
 
     def clientConnectionFailed(self, connector, reason):
         "connection failed:", reason
