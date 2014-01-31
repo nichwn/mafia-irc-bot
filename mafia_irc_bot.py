@@ -1,5 +1,4 @@
 # TODO - override notices?
-# TODO - !help or /msg HELP etc.
 # TODO - manage if a player d/cs or is kicked
 
 """
@@ -27,7 +26,8 @@ class Role:
 class Player:
     """Stores player information."""
 
-    def __init__(self, state = "alive", role = None):
+    def __init__(self, user, state = "alive", role = None):
+        self.name_case = user
         self.state = state
         self.role = role
         self.vote = None
@@ -61,7 +61,7 @@ class MafiaGame:
         """Start a new game."""
         self.phase = self.SIGN_UP
         self.gop = user.lower()
-        self.players[self.gop] = Player()
+        self.players[self.gop] = Player(user)
 
 
     def commands(self):
@@ -143,19 +143,19 @@ class MafiaGame:
     def getLivingPlayers(self):
         """Return a list of all living players."""
         alive = []
-        for k, v in self.players.iteritems():
+        for v in self.players.itervalues():
             # Iterate through all the players
             if v.state == "alive":
                 # Living player found
-                alive.append(k)
+                alive.append(v.name_case)
         return alive
 
 
     def join(self, user):
         """Adds a player to the player list, if not already in it."""
-        user = user.lower()
-        if user not in self.players:
-            self.players[user] = Player()
+        luser = user.lower()
+        if luser not in self.players:
+            self.players[luser] = Player(user)
             return True
         else:
             return False
@@ -233,7 +233,7 @@ class MafiaGame:
             self.players[p].role = roles[i]
             i += 1
 
-        # The mafia as a whole has one action
+        # The mafia as a whole have one action
         self.actions += 1
 
 
@@ -290,15 +290,16 @@ class MafiaGame:
     def getMafia(self):
         """Returns a list of players with the alignment, 'Mafia'."""
         mafia = []
-        for player, data in self.players.iteritems():
-            if data.role.alignment == "Mafia":
-                mafia.append(player)
+        for v in self.players.itervalues():
+            if v.role.alignment == "Mafia":
+                mafia.append(v.name_case)
         return mafia
 
 
     def resVote(self, target):
         """Return True if the target player has been lynched, else False."""
         # Voted for a player
+        target = target.lower()
         if target in self.players:
             if len(self.players[target].voted_by) >= self.majority:
                 return True
@@ -315,30 +316,30 @@ class MafiaGame:
         """Adds a vote to target player. Return True if the target player was
         lynched after this vote, else return False."""
 
-        user = user.lower()
-        target = target.lower()
+        luser = user.lower()
+        ltarget = target.lower()
 
         # Check player exists
-        if target not in self.nl_alias and target not in self.players:
+        if ltarget not in self.nl_alias and ltarget not in self.players:
             raise "Player {} not found when assigning vote.".format(target)
 
         # Remove previous vote, if any
-        old = self.players[user].vote
+        old = self.players[luser].vote
         if old is not None and old not in self.nl_alias:
             # Previously voted for a player
             self.players[old].voted_by.remove(user)
         elif old is not None:
             # Previously voted for 'No Lynch'
-            self.nl_voted.remove(user)
+            self.nl_voted.remove(luser)
 
         # Add new vote
-        self.players[user].vote = target
+        self.players[luser].vote = ltarget
         if target not in self.nl_alias:
             # Voted for a player
-            self.players[target].voted_by.append(user)
+            self.players[ltarget].voted_by.append(luser)
         else:
             # Voted for 'No Lynch'
-            self.nl_voted.append(user)
+            self.nl_voted.append(luser)
             
         return self.resVote(target)
 
@@ -346,6 +347,19 @@ class MafiaGame:
     def getNoLynchAliases(self):
         """Return a list of aliases for 'No Lynch'."""
         return self.nl_alias
+
+
+    def pExist(self, target):
+        """Determines whether a player exists (or is an alias for 'No Lynch'.
+        """
+        living = [p.lower() for p in self.getLivingPlayers()]
+        nlalias = [a.lower() for a in self.getNoLynchAliases()]
+        target = target.lower()
+
+        if target in living or target in nlalias:
+            return True
+        else:
+            return False
 
 
 class MafiaBot(irc.IRCClient):
@@ -629,15 +643,14 @@ class MafiaBot(irc.IRCClient):
     def comVote(self, target, user, channel):
         """Change a player's vote target."""
         # TODO - move the next line into its own function
-        exist = (target.lower() in self.game.getLivingPlayers() or
-                 target.lower() in self.game.getNoLynchAliases())
+        exist = self.game.pExist(user)
         lynched = False
         if self.game.getPhase() != self.game.getDay():
             # Day phase only command
             msg = "This command can only be used in the Day Phase."
         elif not exist:
             # Target not found
-            msg = ("Invalid voted. Player "
+            msg = ("Invalid vote. Player "
                    "'{}' not found.".format(target))
         else:
             lynched = self.game.addVote(target, user)
