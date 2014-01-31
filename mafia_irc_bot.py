@@ -391,21 +391,15 @@ class MafiaBot(irc.IRCClient):
         # kept for message outputs
         user = user.split('!', 1)[0]
 
-        # Check for a command
-        if msg.startswith('!'):
-            line = msg[1:]
-        else:
-            return
-
         # Check if a second argument has been provided
         try:
-            target = line.split()[1]
+            target = msg.split()[1]
         except:
             target = ""
 
         # For commands where parameters may be outputted, the original input
         # needs to be kept
-        farg = line.lower().split()[0]
+        farg = msg.lower().split()[0]
 
         # Interpret the entire command
         self.runCommand(farg, target, user, channel)
@@ -444,13 +438,12 @@ class MafiaBot(irc.IRCClient):
     def comsPublic(self, farg, target, user, channel):
         """Interprets and runs public commands."""
         
-        """#  TODO - preparation for upcoming interface modifications
         # All public commands must start with a '!' to distinguish them from
         # other messages
         if not farg.startswith('!'):  
             return
         else:
-            farg = farg[1:]"""
+            farg = farg[1:]
 
         # Run the command
         if farg == "new":
@@ -558,7 +551,7 @@ class MafiaBot(irc.IRCClient):
         else:
             # Game inactive
             msg = ("Failed, as this command only works during the main "
-                   "section of the game."
+                   "section of the game.")
         self.msg_send(self.nickname, channel, user, msg)
 
 
