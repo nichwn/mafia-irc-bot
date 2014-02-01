@@ -52,6 +52,7 @@ class MafiaGame:
         self.gop = ""
         self.round = 0
         self.actions = 0
+        self.used_actions = 0
         self.nl_alias = ["Nobody", "No-one", "Noone", "No_Lynch"]
         self.nl_voted_by = []
         self.phase = self.INITIAL
@@ -126,7 +127,9 @@ class MafiaGame:
         self.phase = self.INITIAL
         self.round = 0
         self.actions = 0
+        self.used_actions = 0
         self.nl_voted_by = []
+        self.mkill = None
 
 
     def transferGop(self, user, target):
@@ -213,6 +216,9 @@ class MafiaGame:
             roles.append(role_goon)
             count += 1
 
+        # The mafia as a whole have one action
+        self.actions += 1
+
         # Town roles
         count = 0
         n_town = p_num - n_mafia
@@ -233,9 +239,6 @@ class MafiaGame:
             self.players[p].role = roles[i]
             i += 1
 
-        # The mafia as a whole have one action
-        self.actions += 1
-
 
     def rollRoles(self):
         """Determines peoples roles."""
@@ -248,15 +251,24 @@ class MafiaGame:
         return self.players
 
 
-    def nextRound(self):
-        """Increments the round number, and returns it."""
-        self.round += 1
+    def nextPhase(self):
+        """Sets the phase to 'Day' if it isn't already. Else, set to 'Night'.
+        Return the round number."""
+        if self.phase != self.DAY:
+            self.phase = self.DAY
+            self.round += 1
+        else:
+            self.phase = self.NIGHT
         return self.round
 
 
     def setDay(self):
         """Sets the game status to 'Day'."""
         self.phase = self.DAY
+
+    def setNight(self):
+        """Sets the game status to 'Night'."""
+        self.phase = self.NIGHT
 
 
     def clear(self):
@@ -265,6 +277,8 @@ class MafiaGame:
             self.players[p].vote = None
             self.players[p].voted_by = []
             self.players[p].role.ab_target = None
+        self.used_actions = 0
+        self.mkill = None
 
 
     def detVictory(self):
@@ -715,7 +729,7 @@ class MafiaBot(irc.IRCClient):
         # Someone lynched?
         if lynched != False:
             # Vote is sufficient to lynch someone
-            self.rollNight(channel, target)
+            self.rollNight(channel)
 
 
     def comVotes(self, user, channel):
@@ -774,11 +788,8 @@ class MafiaBot(irc.IRCClient):
 
     def rollDay(self, channel):
         """Roll a new day phase."""
-        self.newPhaseAct()
-        self.game.setDay()
+        r, p_num = self.rollGeneral()
         majority = self.game.getMajority()
-        p_num = self.game.numPlayers()
-        r = self.game.nextRound()
 
         # Day flavour
         msg = "Another day rises on the townsfolk."
@@ -788,7 +799,33 @@ class MafiaBot(irc.IRCClient):
                "it will take {} votes for majority to be ".format(majority) +
                "reached.")
         self.msg(channel, msg)
+
+
+    def rollNight(self, channel):
+        """Roll a new night phase."""
+        r, p_num = self.rollGeneral()
+
+        # Night flavour
+        self.newNightLynchFlav()
+        msg = ("Night falls upon the town, and the townsfolk scurry back into "
+               "their beds.\n")
+        msg += ("It is now Night {}. There are currently {} ".format(r, p_num) +
+               "people alive.")
+        self.msg(channel, msg)
+
+
+    def rollGeneral(self):
+        """Return requisite data to roll phases, and performs some new phase
+        proceedings.
         
+        Return format is:
+
+        [round number, number of players]"""
+        self.newPhaseAct()
+        r = self.game.nextPhase()
+        p_num = self.game.numPlayers()
+        return [r, p_num]
+
 
     def newPhaseAct(self):
         """Performs actions required at the start of every phase."""
@@ -806,6 +843,10 @@ class MafiaBot(irc.IRCClient):
 
 
     def newDayDeathFlav(self):
+        pass
+
+
+    def newNightLynchFlav(self):
         pass
 
 
@@ -834,11 +875,6 @@ class MafiaBot(irc.IRCClient):
                         "{} <kill target>.".format(self.nickname))
 
             self.msg(p_name, msg)
-
-
-    def rollNight(self, channel, target):
-        """Rolls a new night phase."""
-        pass
 
 
 class MafiaBotFactory(protocol.ClientFactory):
