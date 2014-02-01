@@ -740,6 +740,8 @@ class MafiaBot(irc.IRCClient):
 
         # Check for it being an appropriate phase
         if self.game.getPhase() != self.game.getDay():
+            msg = "Failed, as there isn't a lynch being held right now."
+            self.msg(channel, msg)
             return
 
         # Check for no votes:
