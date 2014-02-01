@@ -52,7 +52,7 @@ class MafiaGame:
         self.gop = ""
         self.round = 0
         self.actions = 0
-        self.nl_alias = ["nobody", "no-one", "noone", "no_lynch"]
+        self.nl_alias = ["Nobody", "No-one", "Noone", "No_Lynch"]
         self.nl_voted_by = []
         self.phase = self.INITIAL
 
@@ -312,6 +312,13 @@ class MafiaGame:
         return False
 
 
+    def delLower(self, seq, target):
+        """Deletes the first occurence of target in a list (case insensitive).
+        """
+        i = [item.lower() for item in seq].index(target.lower())
+        del seq[i]
+
+
     def addVote(self, target, user):
         """Adds a vote to target player. Return True if the target player was
         lynched after this vote, else return False (including if the target
@@ -319,28 +326,30 @@ class MafiaGame:
 
         luser = user.lower()
         ltarget = target.lower()
+        lnl_alias = [i.lower() for i in self.nl_alias]
+        lplayers = [i.lower() for i in self.players]
 
         # Check player exists
-        if ltarget not in self.nl_alias and ltarget not in self.players:
+        if ltarget not in lnl_alias and ltarget not in lplayers:
             return False
 
         # Remove previous vote, if any
         old = self.players[luser].vote
-        if old is not None and old not in self.nl_alias:
+        if old is not None and old.lower() not in lnl_alias:
             # Previously voted for a player
-            self.players[old].voted_by.remove(luser)
+            self.delLower(self.players[old.lower()].voted_by, user)
         elif old is not None:
             # Previously voted for 'No Lynch'
-            self.nl_voted_by.remove(luser)
+            self.delLower(self.nl_voted_by, user)
 
         # Add new vote
-        self.players[luser].vote = ltarget
-        if ltarget not in self.nl_alias:
+        self.players[luser].vote = target
+        if ltarget not in lnl_alias:
             # Voted for a player
-            self.players[ltarget].voted_by.append(luser)
+            self.players[ltarget].voted_by.append(user)
         else:
             # Voted for 'No Lynch'
-            self.nl_voted_by.append(luser)
+            self.nl_voted_by.append(user)
             
         return self.resVote(target)
 
@@ -388,7 +397,6 @@ class MafiaGame:
             result.append(self.calcIndiVote(self.nl_alias[0], n_votes,
                                               self.nl_voted_by))
 
-        print result, result[0][1], result[0][0]
         result.sort(key = lambda item: (item[1], item[0]))
         return result
 
@@ -685,7 +693,6 @@ class MafiaBot(irc.IRCClient):
 
     def comVote(self, target, user, channel):
         """Change a player's vote target."""
-        # TODO - move the next line into its own function
         exist = self.game.pExist(target)
         lynched = False
         if self.game.getPhase() != self.game.getDay():
