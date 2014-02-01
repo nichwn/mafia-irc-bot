@@ -53,7 +53,7 @@ class MafiaGame:
         self.round = 0
         self.actions = 0
         self.nl_alias = ["nobody", "no-one", "noone", "no_lynch"]
-        self.nl_voted = []
+        self.nl_voted_by = []
         self.phase = self.INITIAL
 
 
@@ -126,7 +126,7 @@ class MafiaGame:
         self.phase = self.INITIAL
         self.round = 0
         self.actions = 0
-        self.nl_voted = []
+        self.nl_voted_by = []
 
 
     def transferGop(self, user, target):
@@ -306,7 +306,7 @@ class MafiaGame:
             
         # Voted for 'No Lynch'
         else:
-            if len(self.nl_voted) >= self.majority:
+            if len(self.nl_voted_by) >= self.majority:
                 return True
 
         return False
@@ -314,32 +314,33 @@ class MafiaGame:
 
     def addVote(self, target, user):
         """Adds a vote to target player. Return True if the target player was
-        lynched after this vote, else return False."""
+        lynched after this vote, else return False (including if the target
+        player isn't present)."""
 
         luser = user.lower()
         ltarget = target.lower()
 
         # Check player exists
         if ltarget not in self.nl_alias and ltarget not in self.players:
-            raise "Player {} not found when assigning vote.".format(target)
+            return False
 
         # Remove previous vote, if any
         old = self.players[luser].vote
         if old is not None and old not in self.nl_alias:
             # Previously voted for a player
-            self.players[old].voted_by.remove(user)
+            self.players[old].voted_by.remove(luser)
         elif old is not None:
             # Previously voted for 'No Lynch'
-            self.nl_voted.remove(luser)
+            self.nl_voted_by.remove(luser)
 
         # Add new vote
         self.players[luser].vote = ltarget
-        if target not in self.nl_alias:
+        if ltarget not in self.nl_alias:
             # Voted for a player
             self.players[ltarget].voted_by.append(luser)
         else:
             # Voted for 'No Lynch'
-            self.nl_voted.append(luser)
+            self.nl_voted_by.append(luser)
             
         return self.resVote(target)
 
@@ -360,6 +361,46 @@ class MafiaGame:
             return True
         else:
             return False
+
+
+    def getVotes(self):
+        """Returns a list of all votes with the format of:
+
+        [[target, number of votes, voter1, voter2 (if any), ...], ...]
+
+        Players without any votes are ignored. The elements will be sorted by
+        the number of votes, and then by the target's name."""
+        result = []
+
+        # Search through every player
+        for player in self.players:
+            n_votes = len(self.players[player].voted_by)
+
+            # Player with votes found
+            if n_votes:
+                result.append(self.calcIndiVote(self.players[player].name_case,
+                                                n_votes,
+                                                self.players[player].voted_by))
+
+        # Add votes for 'No Lynch', if any
+        n_votes = len(self.nl_voted_by)
+        if n_votes:
+            result.append(self.calcIndiVote(self.nl_alias[0], n_votes,
+                                              self.nl_voted_by))
+
+        print result, result[0][1], result[0][0]
+        result.sort(key = lambda item: (item[1], item[0]))
+        return result
+
+
+    def calcIndiVote(self, name, n_votes, votes):
+        """Creates an element as specified by self.getVotes. Intended for use by
+        self.getVotes only."""
+        element = []
+        element.append(name)
+        element.append(n_votes)
+        element.extend(votes)
+        return element
 
 
 class MafiaBot(irc.IRCClient):
@@ -433,6 +474,8 @@ class MafiaBot(irc.IRCClient):
         """Interprets and runs private commands."""
         if farg == "help":
             comHelp(user, channel)
+        elif farg == "alive":
+            self.comAlive(user, channel)
 
 
     def comHelp(self, user, channel):
@@ -478,6 +521,8 @@ class MafiaBot(irc.IRCClient):
             self.comStart(user, channel)
         elif farg == "vote":
             self.comVote(target, user, channel)
+        elif farg == "votes":
+            self.comVotes(user, channel)
 
 
     def comNew(self, user, channel):
@@ -555,8 +600,6 @@ class MafiaBot(irc.IRCClient):
 
     def comAlive(self, user, channel):
         """Lists out the names of all living players."""
-        # Not yet tested, as there's no way to start the game yet. A bit
-        # dumb to have written it at this stage I'll admit.
         if self.game.getPhase() > self.game.getSign_Up():
             # Game active, so determine living players
             msg = "Players alive:"
@@ -643,7 +686,7 @@ class MafiaBot(irc.IRCClient):
     def comVote(self, target, user, channel):
         """Change a player's vote target."""
         # TODO - move the next line into its own function
-        exist = self.game.pExist(user)
+        exist = self.game.pExist(target)
         lynched = False
         if self.game.getPhase() != self.game.getDay():
             # Day phase only command
@@ -663,6 +706,32 @@ class MafiaBot(irc.IRCClient):
             self.rollNight(channel, target)
 
 
+    def comVotes(self, user, channel):
+        """Outputs a list of all players with votes on them, how many, and who
+        voted for them."""
+        v_data = self.game.getVotes()
+        msg = ""
+
+        # Check for it being an appropriate phase
+        if self.game.getPhase() != self.game.getDay():
+            return
+
+        # Check for no votes:
+        if not len(v_data):
+            msg += "There have been no votes placed."
+
+        # Format vote data for output
+        for target in v_data:
+            msg += "{} [{}]:".format(target[0], target[1])
+            msg += " {}".format(target[2])
+            target = target[3:]
+            for voter in target:
+                msg += ", {}".format(voter)
+            msg += '\n'
+
+        self.msg_send(self.nickname, channel, user, msg)
+
+
     def irc_NICK(self, prefix, params):
         """Called when an IRC user changes their nickname."""
         old_nick = prefix.split('!')[0]
@@ -675,6 +744,7 @@ class MafiaBot(irc.IRCClient):
 
     def msg_send(self, nickname, channel, user, msg):
         """Determines where to send a message, and sends it."""
+        # TODO - with the new format, this has become obsolete
         if nickname.lower() == channel:
             # Private message
             self.msg(user, msg)
