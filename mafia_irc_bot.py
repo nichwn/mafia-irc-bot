@@ -674,12 +674,17 @@ class MafiaBot(irc.IRCClient):
         """Attempt to close sign-ups and start the game."""
         n_players = self.game.numPlayers()
         if (self.game.isGop(user) and
-            self.MIN_PLAYERS <= n_players):
+            self.MIN_PLAYERS <= n_players and
+            self.game.getPhase() == self.game.getSign_Up()):
             # Closes sign ups and begins the game
             msg = ("Sign ups have been closed, and the game will begin "
                    "shortly. You should be receiving your roles now.")
             self.gameStart(channel)
             return
+        elif self.game.getPhase() != self.game.getSign_Up():
+            # Wrong phase
+            msg = ("Failed to start the game, as it can only be done during "
+                   "sign ups.")
         elif not self.game.isGop(user):
             # Only GOP can use this command
             msg = "Only the GOP can use this command."
