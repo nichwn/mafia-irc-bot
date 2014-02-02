@@ -311,19 +311,33 @@ class MafiaGame:
 
 
     def resVote(self, target):
-        """Return True if the target player has been lynched, else False."""
+        """If the target player has the majority of votes on them, remove
+        them and return their name, alignment and role name, except for a
+        'No Lynch', which returns None. Return False if the condition has not
+        been fulfilled."""
+        
         # Voted for a player
         target = target.lower()
         if target in self.players:
             if len(self.players[target].voted_by) >= self.majority:
-                return True
+                return self.removePlayer(target)
             
         # Voted for 'No Lynch'
         else:
             if len(self.nl_voted_by) >= self.majority:
-                return True
+                return None
 
         return False
+
+
+    def removePlayer(self, target):
+        """Removes a player and returns their name, alignment and role name."""
+        target = target.lower()
+        name = self.players[target].name_case
+        align = self.players[target].role.alignment
+        role = self.players[target].role.r_name
+        del self.players[target]
+        return (name, align, role)
 
 
     def delLower(self, seq, target):
@@ -711,7 +725,8 @@ class MafiaBot(irc.IRCClient):
     
 
     def comVote(self, target, user, channel):
-        """Change a player's vote target."""
+        """Change a player's vote target. Rolls to Night if a player is
+        lynched."""
         exist = self.game.pExist(target)
         lynched = False
         if self.game.getPhase() != self.game.getDay():
@@ -729,7 +744,7 @@ class MafiaBot(irc.IRCClient):
         # Someone lynched?
         if lynched != False:
             # Vote is sufficient to lynch someone
-            self.rollNight(channel)
+            self.rollNight(lynched, channel)
 
 
     def comVotes(self, user, channel):
@@ -790,26 +805,33 @@ class MafiaBot(irc.IRCClient):
 
     def rollDay(self, channel):
         """Roll a new day phase."""
-        r, p_num = self.rollGeneral()
-        majority = self.game.getMajority()
-
-        # Day flavour
         msg = "Another day rises on the townsfolk."
         self.msg(channel, msg)
         self.newDayDeathFlav()
+
+        r, p_num = self.rollGeneral()
+        majority = self.game.getMajority()
+        
         msg = ("It is now Day {}. With {} people alive, ".format(r, p_num) +
                "it will take {} votes for majority to be ".format(majority) +
                "reached.")
         self.msg(channel, msg)
 
 
-    def rollNight(self, channel):
+    def rollNight(self, lynched, channel):
         """Roll a new night phase."""
-        r, p_num = self.rollGeneral()
+        if lynched is None:
+            msg = "Nobody was lynched today.\n"
+        else:
+            name = lynched[0]
+            align = lynched[1]
+            role = lynched[2]
+            msg = ("{} was lynched. They were a(n) ".format(name) +
+                   "{} {}.\n".format(align, role))
 
-        # Night flavour
-        self.newNightLynchFlav()
-        msg = ("Night falls upon the town, and the townsfolk scurry back into "
+        r, p_num = self.rollGeneral()
+            
+        msg += ("Night falls upon the town, and the townsfolk scurry back into "
                "their beds.\n")
         msg += ("It is now Night {}. There are currently {} ".format(r, p_num) +
                "people alive.")
