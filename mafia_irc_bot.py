@@ -453,10 +453,10 @@ class MafiaGame:
         return element
 
 
-    def mafiaKill(self, target):
+    def mafiaKill(self, target, user):
         """Sets the target for the mafia kill, and if it's the last action
         for the phase, returns True."""
-        # Check if the player exists
+        # Check if the target player exists
         if not self.pExist(target):
             return False
         
@@ -535,23 +535,23 @@ class MafiaBot(irc.IRCClient):
         """Interprets and runs a given command."""
         if channel == self.nickname.lower():
             # Privately sent command
-            self.comsPrivate(farg, target, user, channel)
+            self.comsPrivate(farg, target, user)
         else:
             # Publicly sent command:
             self.comsPublic(farg, target, user, channel)
 
 
-    def comsPrivate(self, farg, target, user, channel):
+    def comsPrivate(self, farg, target, user):
         """Interprets and runs private commands."""
         if farg == "help":
-            comHelp(user, channel)
+            comHelp(user)
         elif farg == "alive":
-            self.comAlive(user, channel)
+            self.comAlive(user)
         elif farg == "kill":
-            self.comKill(target, user, channel)
+            self.comKill(target, user, self.gaChan)
 
 
-    def comHelp(self, user, channel):
+    def comHelp(self, channel):
         """Gives help messages to the user."""
         curr_phase = self.game.getPhase()
         if curr_phase == self.game.getInitial():
@@ -568,9 +568,9 @@ class MafiaBot(irc.IRCClient):
     def comKill(self, target, user, channel):
         """Registers the target for the mafia kill, and if it's the last
         action, rolls to the next round."""
-        end_phase = self.game.mafiaKill(target)
+        end_phase = self.game.mafiaKill(target, user)
         if end_phase:
-            self.rollToDay(self.gaChan)
+            self.rollToDay(channel)
 
 
     def comsPublic(self, farg, target, user, channel):
@@ -593,7 +593,7 @@ class MafiaBot(irc.IRCClient):
         elif farg == "gop":
             self.comGop(target, user, channel)
         elif farg == "alive":
-            self.comAlive(user, channel)
+            self.comAlive(channel)
         elif farg == "join":
             self.comJoin(user, channel)
         elif farg == "leave":
@@ -627,7 +627,7 @@ class MafiaBot(irc.IRCClient):
                    "before starting a new one.\nIf you'd like to end a "
                    "game early, you can type !end to end the game, or "
                    "!restart to restart the game if you're the GOP.")
-        self.msg_send(self.nickname, channel, user, msg)
+        self.msg(channel, msg)
 
 
     def comEnd(self, user, channel):
@@ -641,7 +641,7 @@ class MafiaBot(irc.IRCClient):
         else:
             msg = ("Failed to end the game. Are you sure that a game "
                    "is running, and that you're the GOP?")
-        self.msg_send(self.nickname, channel, user, msg)
+        self.msg(channel, msg)
 
 
     def comRestart(self, user, channel):
@@ -658,7 +658,7 @@ class MafiaBot(irc.IRCClient):
         else:
             msg = ("Failed to restart the game. Are you sure that a game "
                    "is running, and that you're the GOP?")
-        self.msg_send(self.nickname, channel, user, msg)
+        self.msg(channel, msg)
 
         if restart:
             # Begin a new game
@@ -677,10 +677,10 @@ class MafiaBot(irc.IRCClient):
         else:
             msg = ("Failed to transfer GOP. Are you sure you have GOP, "
                     "and that the player '{}' exists?".format(target))
-        self.msg_send(self.nickname, channel, user, msg)
+        self.msg(channel, msg)
 
 
-    def comAlive(self, user, channel):
+    def comAlive(self, channel):
         """Lists out the names of all living players."""
         if self.game.getPhase() > self.game.getSign_Up():
             # Game active, so determine living players
@@ -691,7 +691,7 @@ class MafiaBot(irc.IRCClient):
             # Game inactive
             msg = ("Failed, as this command only works during the main "
                    "section of the game.")
-        self.msg_send(self.nickname, channel, user, msg)
+        self.msg(channel, msg)
 
 
     def comJoin(self, user, channel):
@@ -713,7 +713,7 @@ class MafiaBot(irc.IRCClient):
             # Already signed up
             msg = ("Failed to join the game, as {} ".format(user)
                    + "has already entered.")
-        self.msg_send(self.nickname, channel, user, msg)
+        self.msg(channel, msg)
 
 
     def comLeave(self, user, channel):
@@ -741,7 +741,7 @@ class MafiaBot(irc.IRCClient):
             # Not in game
             msg = ("Failed to leave the game, as {} ".format(user)
                    + "has not entered it.")
-        self.msg_send(self.nickname, channel, user, msg)
+        self.msg(channel, msg)
 
 
     def comStart(self, user, channel):
@@ -767,7 +767,7 @@ class MafiaBot(irc.IRCClient):
             msg = ("Insufficient number of players. The minimum number "
                    "is {} and there is/are only ".format(self.MIN_PLAYERS) +
                    "{} player(s) signed up.".format(n_players))
-        self.msg_send(self.nickname, channel, user, msg)
+        self.msg(channel, msg)
     
 
     def comVote(self, target, user, channel):
@@ -785,7 +785,7 @@ class MafiaBot(irc.IRCClient):
         else:
             lynched = self.game.addVote(target, user)
             msg = ""
-        self.msg_send(self.nickname, channel, user, msg)
+        self.msg(channel, msg)
 
         # Someone lynched?
         if lynched != False:
@@ -818,7 +818,7 @@ class MafiaBot(irc.IRCClient):
                 msg += ", {}".format(voter)
             msg += '\n'
 
-        self.msg_send(self.nickname, channel, user, msg)
+        self.msg(channel, msg)
 
 
     def irc_NICK(self, prefix, params):
@@ -829,18 +829,6 @@ class MafiaBot(irc.IRCClient):
 
 
         # Other functions
-
-
-    def msg_send(self, nickname, channel, user, msg):
-        """Determines where to send a message, and sends it."""
-        # TODO - with the new format, this has become obsolete
-        if nickname.lower() == channel:
-            # Private message
-            self.msg(user, msg)
-        else:
-            # Channel
-            self.msg(channel, msg)
-
 
     def gameStart(self, channel):
         self.game.rollRoles()
