@@ -56,6 +56,7 @@ class MafiaGame:
         self.nl_alias = ["Nobody", "No-one", "Noone", "No_Lynch"]
         self.nl_voted_by = []
         self.phase = self.INITIAL
+        self.mkill = None
 
 
     def newGame(self, user):
@@ -284,14 +285,15 @@ class MafiaGame:
     def detVictory(self):
         """Determines if an alignment has won. Return None if no alignment has.
         """
-        align = []
+        pass
+        """align = []
         for data in self.players.values():
             if data.role.alignment not in align:
                 align.append(data.role.alignment)
                 if len(align) > 1:
                     # More than one alignment still remains
                     return None
-        return align[0]
+        return align[0]"""
 
 
     def getMajority(self):
@@ -338,6 +340,18 @@ class MafiaGame:
         role = self.players[target].role.r_name
         del self.players[target]
         return (name, align, role)
+
+
+    def resolveNight(self):
+        """Resolves night phase actions. Return the name, alignment and role
+        of the mafia's target, or None otherwise."""
+        if self.mkill is None:
+            return None
+        targ = self.mkill.lower()
+        if targ in self.players:
+            return self.removePlayer(targ)
+        else:
+            return None
 
 
     def delLower(self, seq, target):
@@ -388,8 +402,8 @@ class MafiaGame:
 
 
     def pExist(self, target):
-        """Determines whether a player exists (or is an alias for 'No Lynch'.
-        """
+        """Determines whether a player exists (or is an alias for 'No Lynch'/
+        Nobody)."""
         living = [p.lower() for p in self.getLivingPlayers()]
         nlalias = [a.lower() for a in self.getNoLynchAliases()]
         target = target.lower()
@@ -437,6 +451,27 @@ class MafiaGame:
         element.append(n_votes)
         element.extend(votes)
         return element
+
+
+    def mafiaKill(self, target):
+        """Sets the target for the mafia kill, and if it's the last action
+        for the phase, returns True."""
+        # Check if the player exists
+        if not self.pExist(target):
+            return False
+        
+        old = self.mkill
+        self.mkill = target
+
+        # Check if a previous target existed
+        if old is None:
+            self.used_actions +=1
+
+            # Last action?
+            if self.used_actions == self.actions:
+                return True
+
+        return False
 
 
 class MafiaBot(irc.IRCClient):
@@ -512,6 +547,8 @@ class MafiaBot(irc.IRCClient):
             comHelp(user, channel)
         elif farg == "alive":
             self.comAlive(user, channel)
+        elif farg == "kill":
+            self.comKill(target, user, channel)
 
 
     def comHelp(self, user, channel):
@@ -526,6 +563,14 @@ class MafiaBot(irc.IRCClient):
         elif curr_phase == self.game.getNight():
             pass
         # TODO - also print out 'anytime' commands
+
+
+    def comKill(self, target, user, channel):
+        """Registers the target for the mafia kill, and if it's the last
+        action, rolls to the next round."""
+        end_phase = self.game.mafiaKill(target)
+        if end_phase:
+            self.rollToDay(self.gaChan)
 
 
     def comsPublic(self, farg, target, user, channel):
@@ -568,6 +613,7 @@ class MafiaBot(irc.IRCClient):
         if self.game.getPhase() == self.game.getInitial():
             
             self.game.newGame(user)
+            self.gaChan = channel
             msg = ("A new mafia game has begun! Type !join to join. There "
                    "is a minimum of {}, and ".format(self.MIN_PLAYERS) +
                    "a maximum of {} players ".format(self.MAX_PLAYERS) +
@@ -744,7 +790,7 @@ class MafiaBot(irc.IRCClient):
         # Someone lynched?
         if lynched != False:
             # Vote is sufficient to lynch someone
-            self.rollNight(lynched, channel)
+            self.rollToNight(lynched, channel)
 
 
     def comVotes(self, user, channel):
@@ -799,15 +845,14 @@ class MafiaBot(irc.IRCClient):
     def gameStart(self, channel):
         self.game.rollRoles()
         self.outRoles()
-        self.rollDay(channel)
-        # TODO - game start flavour
+        self.rollToDay(channel)
 
 
-    def rollDay(self, channel):
+    def rollToDay(self, channel):
         """Roll a new day phase."""
         msg = "Another day rises on the townsfolk."
         self.msg(channel, msg)
-        self.newDayDeathFlav()
+        self.nightActFlav(channel)
 
         r, p_num = self.rollGeneral()
         majority = self.game.getMajority()
@@ -818,7 +863,7 @@ class MafiaBot(irc.IRCClient):
         self.msg(channel, msg)
 
 
-    def rollNight(self, lynched, channel):
+    def rollToNight(self, lynched, channel):
         """Roll a new night phase."""
         if lynched is None:
             msg = "Nobody was lynched today.\n"
@@ -853,6 +898,7 @@ class MafiaBot(irc.IRCClient):
 
     def newPhaseAct(self):
         """Performs actions required at the start of every phase."""
+        # TODO - move into MafiaGame
         self.game.clear()
         vict = self.game.detVictory()
         if vict is not None:
@@ -866,12 +912,15 @@ class MafiaBot(irc.IRCClient):
         pass
 
 
-    def newDayDeathFlav(self):
-        pass
-
-
-    def newNightLynchFlav(self):
-        pass
+    def nightActFlav(self, channel):
+        """Outputs night flavour resulting from player actions.""" 
+        res = self.game.resolveNight()
+        if res is not None:
+            name, align, role = res
+            msg = "{} was killed. They were a {} {}.".format(name, align, role)
+        else:
+            msg = ""
+        self.msg(channel, msg)
 
 
     def outRoles(self):
@@ -890,13 +939,13 @@ class MafiaBot(irc.IRCClient):
                 msg += "Your team is composed of:\n"
                 for m in mafia:
                     msg += "{}\n".format(m)
-                msg += "And you may PM them at any time.\n"
+                msg += "And you share teamspeak with them.\n"
 
                 # Kill
                 msg += ("The mafia alignment has a kill shared between them, "
                         "which can be used during the night phase with the "
                         "command:\n/msg "
-                        "{} <kill target>.".format(self.nickname))
+                        "{} kill <kill target>.".format(self.nickname))
 
             self.msg(p_name, msg)
 
