@@ -454,8 +454,8 @@ class MafiaGame:
 
 
     def mafiaKill(self, target, user):
-        """Sets the target for the mafia kill, and if it's the last action
-        for the phase, returns True."""
+        """Sets the target for the mafia kill, and if it succeeded,
+        returns True."""
         # Check that the user is mafia
         mafia = [m.lower() for m in self.getMafia()]
         if user.lower() not in mafia:
@@ -472,10 +472,13 @@ class MafiaGame:
         if old is None:
             self.used_actions +=1
 
-            # Last action?
-            if self.used_actions == self.actions:
-                return True
+        return True
 
+
+    def detEndNight(self):
+        """Returns True if all actions have been submitted."""
+        if self.used_actions == self.actions:
+            return True
         return False
 
 
@@ -553,7 +556,7 @@ class MafiaBot(irc.IRCClient):
         elif farg == "alive":
             self.comAlive(user)
         elif farg == "kill":
-            self.comKill(target, user, self.gaChan)
+            self.comKill(target, user, user)
 
 
     def comHelp(self, channel):
@@ -573,9 +576,19 @@ class MafiaBot(irc.IRCClient):
     def comKill(self, target, user, channel):
         """Registers the target for the mafia kill, and if it's the last
         action, rolls to the next round."""
-        end_phase = self.game.mafiaKill(target, user)
+        # Kill
+        succ = self.game.mafiaKill(target, user)
+        if succ:
+            msg = "{} has now been targeted for the mafia kill.".format(target)
+        else:
+            msg = ("Failed to designate {} ".format(target) +
+                   "as the mafia kill target.")
+        self.msg(channel, msg)
+
+        # End of night phase?
+        end_phase = self.game.detEndNight()
         if end_phase:
-            self.rollToDay(channel)
+            self.rollToDay(self.gaChan)
 
 
     def comsPublic(self, farg, target, user, channel):
