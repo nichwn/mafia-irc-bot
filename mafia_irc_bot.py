@@ -456,6 +456,11 @@ class MafiaGame:
     def mafiaKill(self, target, user):
         """Sets the target for the mafia kill, and if it's the last action
         for the phase, returns True."""
+        # Check that the user is mafia
+        mafia = [m.lower() for m in self.getMafia()]
+        if user.lower() not in mafia:
+            return False
+
         # Check if the target player exists
         if not self.pExist(target):
             return False
