@@ -282,15 +282,20 @@ class MafiaGame:
     def detVictory(self):
         """Determines if an alignment has won. Return None if no alignment has.
         """
-        pass
-        """align = []
+        # Tally up
+        mafia = 0
+        align = []
         for data in self.players.values():
-            if data.role.alignment not in align:
-                align.append(data.role.alignment)
-                if len(align) > 1:
-                    # More than one alignment still remains
-                    return None
-        return align[0]"""
+            align.append(data.role.alignment)
+            if data.role.alignment == "Mafia":
+                mafia +=1
+
+        # Determine victory
+        if mafia == 0:
+            return "Town"
+        elif mafia * 2 >= len(align):
+            return "Mafia"
+        return None
 
 
     def getMajority(self):
