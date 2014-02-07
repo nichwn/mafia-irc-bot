@@ -1,6 +1,3 @@
-# TODO - override notices?
-# TODO - manage if a player d/cs or is kicked
-
 """
 
 An IRC bot which manages Mafia games.
@@ -482,6 +479,11 @@ class MafiaGame:
         return False
 
 
+    def isPlayer(self, user):
+        """Returns True if the user is in the player list."""
+        return user.lower() in self.players
+
+
 class MafiaBot(irc.IRCClient):
     """A bot which manages a mafia game."""
 
@@ -541,22 +543,26 @@ class MafiaBot(irc.IRCClient):
 
     def runCommand(self, farg, target, user, channel):
         """Interprets and runs a given command."""
+
+        isPlayer = self.game.isPlayer(user)
+        
         if channel == self.nickname.lower():
             # Privately sent command
-            self.comsPrivate(farg, target, user)
+            self.comsPrivate(farg, target, user, isPlayer)
         else:
             # Publicly sent command:
-            self.comsPublic(farg, target, user, channel)
+            self.comsPublic(farg, target, user, channel, isPlayer)
 
 
-    def comsPrivate(self, farg, target, user):
+    def comsPrivate(self, farg, target, user, isPlayer):
         """Interprets and runs private commands."""
-        if farg == "help":
-            comHelp(user)
-        elif farg == "alive":
-            self.comAlive(user)
-        elif farg == "kill":
-            self.comKill(target, user, user)
+        if isPlayer:
+            if farg == "help":
+                self.comHelp(user)
+            elif farg == "alive":
+                self.comAlive(user)
+            elif farg == "kill":
+                self.comKill(target, user, user)
 
 
     def comHelp(self, channel):
@@ -591,7 +597,7 @@ class MafiaBot(irc.IRCClient):
             self.rollToDay(self.gaChan)
 
 
-    def comsPublic(self, farg, target, user, channel):
+    def comsPublic(self, farg, target, user, channel, isPlayer):
         """Interprets and runs public commands."""
         
         # All public commands must start with a '!' to distinguish them from
@@ -602,6 +608,16 @@ class MafiaBot(irc.IRCClient):
             farg = farg[1:]
 
         # Run the command
+        if isPlayer:
+            if farg == "start":
+                self.comStart(user, channel)
+            elif farg == "vote":
+                self.comVote(target, user, channel)
+            elif farg == "votes":
+                self.comVotes(user, channel)
+            elif farg == "alive":
+                self.comAlive(channel)
+
         if farg == "new":
             self.comNew(user, channel)
         elif farg == "end":
@@ -610,18 +626,10 @@ class MafiaBot(irc.IRCClient):
             self.comRestart(user, channel)
         elif farg == "gop":
             self.comGop(target, user, channel)
-        elif farg == "alive":
-            self.comAlive(channel)
         elif farg == "join":
             self.comJoin(user, channel)
         elif farg == "leave":
             self.comLeave(user, channel)
-        elif farg == "start":
-            self.comStart(user, channel)
-        elif farg == "vote":
-            self.comVote(target, user, channel)
-        elif farg == "votes":
-            self.comVotes(user, channel)
 
 
     def comNew(self, user, channel):
