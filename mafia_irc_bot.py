@@ -587,7 +587,11 @@ class MafiaBot(irc.IRCClient):
 
     def comKill(self, target, user, channel):
         """Registers the target for the mafia kill, and if it's the last
-        action, rolls to the next round."""
+        action, rolls to the next round. Only works during the night phase."""
+        # Check phase
+        if self.game.getPhase() != self.game.getNight():
+            return
+        
         # Kill
         succ = self.game.mafiaKill(target, user)
         if succ:
