@@ -596,10 +596,12 @@ class MafiaBot(irc.IRCClient):
         succ = self.game.mafiaKill(target, user)
         if succ:
             msg = "{} has now been targeted for the mafia kill.".format(target)
+            for p in self.game.getPAlign():
+                self.msg(p, msg)
         else:
             msg = ("Failed to designate {} ".format(target) +
                    "as the mafia kill target.")
-        self.msg(channel, msg)
+            self.msg(channel, msg)
 
         # End of night phase?
         end_phase = self.game.detEndNight()
@@ -999,7 +1001,7 @@ class MafiaBot(irc.IRCClient):
                 msg += ("The mafia alignment has a kill shared between them, "
                         "which can be used during the night phase with the "
                         "command:\n/msg "
-                        "{} kill <kill target>.".format(self.nickname))
+                        "{} kill <kill target>.".format(self.nickname.lower()))
 
             self.msg(p_name, msg)
 
