@@ -305,15 +305,6 @@ class MafiaGame:
         return self.majority
 
 
-    def getMafia(self):
-        """Returns a list of players with the alignment, 'Mafia'."""
-        mafia = []
-        for v in self.players.itervalues():
-            if v.role.alignment == "Mafia":
-                mafia.append(v.name_case)
-        return mafia
-
-
     def resVote(self, target):
         """If the target player has the majority of votes on them, remove
         them and return their name, alignment and role name, except for a
@@ -459,7 +450,7 @@ class MafiaGame:
         """Sets the target for the mafia kill, and if it succeeded,
         returns True."""
         # Check that the user is mafia
-        mafia = [m.lower() for m in self.getMafia()]
+        mafia = [m.lower() for m in self.getPAlign()]
         if user.lower() not in mafia:
             return False
 
@@ -487,6 +478,16 @@ class MafiaGame:
     def isPlayer(self, user):
         """Returns True if the user is in the player list."""
         return user.lower() in self.players
+
+
+    def getPAlign(self, align = "Mafia"):
+        """Returns a list of players with the alignment that matches align."""
+        players = []
+        for v in self.players.itervalues():
+            if v.role.alignment == align:
+                players.append(v.name_case)
+        return players
+        
 
 
 class MafiaBot(irc.IRCClient):
@@ -663,7 +664,8 @@ class MafiaBot(irc.IRCClient):
 
     def comEnd(self, user, channel):
         """Attempt to end the game."""
-        if self.game.getPhase() != self.game.getInitial() and self.game.end(user):
+        if (self.game.getPhase() != self.game.getInitial() and
+            self.game.end(user)):
             # Success
             msg = ("The game has been closed early by request of "
                    + user + ". Thanks for playing!")
@@ -869,14 +871,19 @@ class MafiaBot(irc.IRCClient):
 
     def rollToDay(self, channel):
         """Roll a new day phase."""
-        msg = "Another day rises on the townsfolk."
-        self.msg(channel, msg)
         self.nightActFlav(channel)
 
-        r, p_num = self.rollGeneral()
+        data = self.rollGeneral(channel)
         majority = self.game.getMajority()
+
+        # End of game
+        if data is None:
+            return
+        else:
+            r, p_num = data
         
-        msg = ("It is now Day {}. With {} people alive, ".format(r, p_num) +
+        msg = ("Another day rises on the townsfolk.\n"
+               "It is now Day {}. With {} people alive, ".format(r, p_num) +
                "it will take {} votes for majority to be ".format(majority) +
                "reached.")
         self.msg(channel, msg)
@@ -893,8 +900,14 @@ class MafiaBot(irc.IRCClient):
             msg = ("{} was lynched. They were a(n) ".format(name) +
                    "{} {}.\n".format(align, role))
 
-        r, p_num = self.rollGeneral()
-            
+        data = self.rollGeneral(channel)
+
+        # End of game
+        if data is None:
+            return
+        else:
+            r, p_num = data
+        
         msg += ("Night falls upon the town, and the townsfolk scurry back into "
                "their beds.\n")
         msg += ("It is now Night {}. There are currently {} ".format(r, p_num) +
@@ -902,33 +915,51 @@ class MafiaBot(irc.IRCClient):
         self.msg(channel, msg)
 
 
-    def rollGeneral(self):
+    def rollGeneral(self, channel):
         """Return requisite data to roll phases, and performs some new phase
         proceedings.
         
         Return format is:
 
-        [round number, number of players]"""
-        self.newPhaseAct()
+        [round number, number of players]
+
+        Or None if the game has ended"""
+        end = self.newPhaseAct(channel)
+
+        if end:
+            return None
+        
         r = self.game.nextPhase()
         p_num = self.game.numPlayers()
         return [r, p_num]
 
 
-    def newPhaseAct(self):
-        """Performs actions required at the start of every phase."""
-        # TODO - move into MafiaGame
+    def newPhaseAct(self, channel):
+        """Performs actions required at the start of every phase. Returns
+        True if the game has ended."""
         self.game.clear()
         vict = self.game.detVictory()
         if vict is not None:
             # Victory achieved
-            self.victory()
-            # TODO - will need to terminate out of enveloping functions
+            self.victory(vict, channel)
+            return True
+        return False
 
 
-    def victory(self):
+    def victory(self, vict, channel):
         """Winning proceedings."""
-        pass
+        win_play = self.game.getPAlign(vict)
+
+        msg = ("Game over! The winning alignment is: '{}'\n".format(vict) +
+               "The winning players are:\n")
+        for p in win_play:
+            msg += "{}\n".format(p)
+        msg += ("Thanks for playing! You may start a new game with the command "
+                "!new.")
+        self.msg(channel, msg)
+
+        self.game.gameClear()
+        
 
 
     def nightActFlav(self, channel):
@@ -945,7 +976,7 @@ class MafiaBot(irc.IRCClient):
     def outRoles(self):
         """Gives players their role information."""
         players = self.game.getPlayers()
-        mafia = self.game.getMafia()
+        mafia = self.game.getPAlign()
         for p_name, data in players.iteritems():
             r_name = data.role.r_name
             align = data.role.alignment
