@@ -1,3 +1,9 @@
+# TODO - help messages
+# TODO - delete player.vote - does nothing
+# TODO - override notices
+# TODO - manage kicked/disconnected players
+# TODO - change GOP on player death
+
 """
 
 An IRC bot which manages Mafia games.
@@ -178,9 +184,10 @@ class MafiaGame:
 
 
     def newGop(self):
-        """Changes the new GOP."""
+        """Changes the GOP. There must be at least one living player."""
+        # TODO - add proper error message
         self.gop = self.players.keys()[0]
-        return self.gop
+        return players[self.gop].name_case
 
 
     def isGop(self, user):
@@ -370,7 +377,7 @@ class MafiaGame:
 
         # Remove previous vote, if any
         old = self.players[luser].vote
-        if old is not None and old.lower() not in lnl_alias:
+        if old is not None and old.lower() in lplayers:
             # Previously voted for a player
             self.delLower(self.players[old.lower()].voted_by, user)
         elif old is not None:
@@ -379,7 +386,7 @@ class MafiaGame:
 
         # Add new vote
         self.players[luser].vote = target
-        if ltarget not in lnl_alias:
+        if ltarget in lplayers:
             # Voted for a player
             self.players[ltarget].voted_by.append(user)
         else:
@@ -487,7 +494,60 @@ class MafiaGame:
             if v.role.alignment == align:
                 players.append(v.name_case)
         return players
-        
+
+
+    def nickChange(self, old_nick, new_nick):
+        """Handles player nickname changes. If a conflict with the aliases "
+        "for 'No Lynch' occurs, returns True and performs no actions. Else,
+        return False."""
+        lold_nick = old_nick.lower()
+        lnew_nick = new_nick.lower()
+
+        # Check for conflict
+        if self.inNLAlias(lnew_nick):
+            return True
+
+        p_data = self.players.pop(lold_nick, None)
+
+        # Not a player
+        if p_data is None:
+            return False
+
+        # Update player storage
+        p_data.name_case = new_nick
+        self.players[lnew_nick] = p_data
+
+        # Update player votes
+        for p in self.players:
+            if self.players[p].vote == old_nick:
+                self.players[p].vote = new_nick
+            
+            try:
+                i = self.players[p].voted_by.index(old_nick)
+            except:
+                pass
+            else:
+                self.players[p].voted_by[i] = new_nick
+
+            try:
+                j = self.nl_voted_by.index(old_nick)
+            except:
+                pass
+            else:
+                self.nl_voted_by[j] = new_nick
+
+        # Update gop
+        if self.gop == lold_nick:
+            self.gop = lnew_nick
+
+        return False
+
+
+    def inNLAlias(self, nick):
+        """Returns True if nick is in an alias for 'No Lynch'/'No Action'.
+        Case insensitive."""
+        if nick.lower() in [n.lower() for n in self.nl_alias]:
+            return True
 
 
 class MafiaBot(irc.IRCClient):
@@ -546,6 +606,54 @@ class MafiaBot(irc.IRCClient):
         # Interpret the entire command
         self.runCommand(farg, target, user, channel)
 
+
+    def irc_NICK(self, prefix, params):
+        """Called when an IRC user changes their nickname."""
+        old_nick = prefix.split('!')[0]
+        new_nick = params[0]
+
+        # Check that the game has started
+        if self.game.getPhase() > self.game.getSign_Up():
+            shared = self.game.nickChange(old_nick, new_nick)
+        else:
+            shared = False
+            
+            # Check nobody
+            if self.game.inNLAlias(new_nick):
+                msg = ("As this nickname has been reserved as an alias for "
+                       "'No Lynch' or 'No Action', {} ".format(new_nick) +
+                       "will be removed from the game.\n")
+                self.msg(self.gaChan, msg)
+                self.comLeave(old_nick, self.gaChan, new_nick)
+
+                # Reset GOP
+                self.game.newGop()
+
+        if shared:
+            data = self.game.removePlayer(old_nick)
+
+            # Reset phase actions
+            self.resetPhaseAct(self.gaChan)
+            majority = self.game.getMajority()
+
+            # General message
+            msg = ("As this nickname has been reserved as an alias for "
+                   "'No Lynch' or 'No Action', {} ".format(new_nick) +
+                   "has been removed from the game.\nThey were a "
+                   "{} {}.\n".format(data[1], data[2]) + "All actions this "
+                   "phase have been reset.\n")
+
+            # Day only message
+            if self.game.getPhase() == self.game.getDay():
+                msg += "It will take {} votes for majority.".format(majority)
+            
+            self.msg(self.gaChan, msg)
+
+            # Reset GOP
+            self.game.newGop()
+
+
+        # Other functions
 
     def runCommand(self, farg, target, user, channel):
         """Interprets and runs a given command."""
@@ -755,14 +863,17 @@ class MafiaBot(irc.IRCClient):
         self.msg(channel, msg)
 
 
-    def comLeave(self, user, channel):
+    def comLeave(self, user, channel, alt_name = None):
         """Attempt to leave a new game."""
         gop = self.game.isGop(user)
         if (self.game.getPhase() == self.game.getSign_Up() and
             self.game.leave(user)):
             
             # Left!
-            msg = "{} has left the game.".format(user)
+            if alt_name is None:
+                msg = "{} has left the game.".format(user)
+            else:
+                msg = "{} has left the game.".format(alt_name)
             if self.game.numPlayers() == 0:
                 # Players remaining?
                 msg += (" As there are no players left the "
@@ -827,7 +938,7 @@ class MafiaBot(irc.IRCClient):
         self.msg(channel, msg)
 
         # Someone lynched?
-        if lynched != False:
+        if lynched:
             # Vote is sufficient to lynch someone
             self.rollToNight(lynched, channel)
 
@@ -859,15 +970,6 @@ class MafiaBot(irc.IRCClient):
 
         self.msg(channel, msg)
 
-
-    def irc_NICK(self, prefix, params):
-        """Called when an IRC user changes their nickname."""
-        old_nick = prefix.split('!')[0]
-        new_nick = params[0]
-        # TODO - change name in player lists, data, votes, voted etc.
-
-
-        # Other functions
 
     def gameStart(self, channel):
         self.game.rollRoles()
@@ -930,7 +1032,7 @@ class MafiaBot(irc.IRCClient):
         [round number, number of players]
 
         Or None if the game has ended"""
-        end = self.newPhaseAct(channel)
+        end = self.resetPhaseAct(channel)
 
         if end:
             return None
@@ -940,10 +1042,11 @@ class MafiaBot(irc.IRCClient):
         return [r, p_num]
 
 
-    def newPhaseAct(self, channel):
-        """Performs actions required at the start of every phase. Returns
-        True if the game has ended."""
+    def resetPhaseAct(self, channel):
+        """Performs actions required to initialise every phase. Return
+        True if the game has ended, else False."""
         self.game.clear()
+        return None  # TODO - debug purposes only: remove
         vict = self.game.detVictory()
         if vict is not None:
             # Victory achieved
